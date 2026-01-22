@@ -1,9 +1,9 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
+import { organization } from "better-auth/plugins"
 
 import type { DataModel } from "./_generated/dataModel";
-
 import { components } from "./_generated/api";
 import { internalAction, query } from "./_generated/server";
 import authConfig from "./auth.config";
@@ -35,7 +35,68 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         jwks: process.env.JWKS,
         jwksRotateOnTokenGenerationError: true,
       }),
+      organization({
+        teams: {
+          enabled: true,
+        },
+        organizationHooks: {
+          afterCreateOrganization: async ({ organization, user }) => {
+
+          },
+          afterAddMember: async ({ member, organization, user }) => {
+
+          },
+          afterRemoveMember: async ({ member }) => {
+
+          },
+          afterCreateTeam: async ({ team, organization }) => {
+
+          },
+          afterDeleteTeam: async ({ team }) => {
+
+          },
+          afterAddTeamMember: async ({ team, teamMember }) => {
+
+          },
+          afterRemoveTeamMember: async ({ teamMember }) => {
+
+          },
+          afterAcceptInvitation: async ({ member, organization, user }) => {
+
+          },
+          afterUpdateMemberRole: async ({ member, previousRole }) => {
+
+          },
+          beforeDeleteOrganization: async ({ organization }) => {
+
+          },
+          afterDeleteOrganization: async ({ organization }) => {
+
+          },
+        }
+      })
     ],
+    databaseHooks: {
+      user: {
+        create: {
+          after: async (user) => {
+
+          }
+        },
+        delete: {
+          after: async (user) => {
+
+          }
+        }
+      },
+      session: {
+        create: {
+          before: async (session) => {
+
+          }
+        }
+      }
+    }
   } satisfies BetterAuthOptions;
 };
 

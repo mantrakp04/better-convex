@@ -15,6 +15,7 @@ import { Route as publicIndexRouteImport } from './routes/(public)/index'
 import { Route as publicAuthRouteImport } from './routes/(public)/auth'
 import { Route as protectedDashboardRouteImport } from './routes/(protected)/dashboard'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as protectedSettingsOrganizationRouteImport } from './routes/(protected)/settings/organization'
 
 const publicRouteRoute = publicRouteRouteImport.update({
   id: '/(public)',
@@ -44,17 +45,25 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const protectedSettingsOrganizationRoute =
+  protectedSettingsOrganizationRouteImport.update({
+    id: '/settings/organization',
+    path: '/settings/organization',
+    getParentRoute: () => protectedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
   '/': typeof publicIndexRoute
+  '/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
   '/': typeof publicIndexRoute
+  '/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -64,13 +73,19 @@ export interface FileRoutesById {
   '/(protected)/dashboard': typeof protectedDashboardRoute
   '/(public)/auth': typeof publicAuthRoute
   '/(public)/': typeof publicIndexRoute
+  '/(protected)/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/dashboard' | '/auth' | '/' | '/api/auth/$'
+  fullPaths:
+    | '/dashboard'
+    | '/auth'
+    | '/'
+    | '/settings/organization'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/dashboard' | '/auth' | '/' | '/api/auth/$'
+  to: '/dashboard' | '/auth' | '/' | '/settings/organization' | '/api/auth/$'
   id:
     | '__root__'
     | '/(protected)'
@@ -78,6 +93,7 @@ export interface FileRouteTypes {
     | '/(protected)/dashboard'
     | '/(public)/auth'
     | '/(public)/'
+    | '/(protected)/settings/organization'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -131,15 +147,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(protected)/settings/organization': {
+      id: '/(protected)/settings/organization'
+      path: '/settings/organization'
+      fullPath: '/settings/organization'
+      preLoaderRoute: typeof protectedSettingsOrganizationRouteImport
+      parentRoute: typeof protectedRouteRoute
+    }
   }
 }
 
 interface protectedRouteRouteChildren {
   protectedDashboardRoute: typeof protectedDashboardRoute
+  protectedSettingsOrganizationRoute: typeof protectedSettingsOrganizationRoute
 }
 
 const protectedRouteRouteChildren: protectedRouteRouteChildren = {
   protectedDashboardRoute: protectedDashboardRoute,
+  protectedSettingsOrganizationRoute: protectedSettingsOrganizationRoute,
 }
 
 const protectedRouteRouteWithChildren = protectedRouteRoute._addFileChildren(
