@@ -4,7 +4,7 @@ import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
 import { organization } from "better-auth/plugins";
 
 import type { DataModel } from "./_generated/dataModel";
-import { ac, roles } from "./shared/auth-shared";
+import { ac, roles } from "./shared/auth_shared";
 import { components } from "./_generated/api";
 import { internalAction, query } from "./_generated/server";
 import authConfig from "./auth.config";

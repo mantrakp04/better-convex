@@ -24,7 +24,7 @@ function ProtectedLayout() {
       getAuthUserFn={api.auth.getAuthUser}
       isAuthError={isAuthError}
     >
-      <div className="flex-1 overflow-y-auto bg-background h-full">
+      <div className="flex-1 overflow-y-auto bg-background h-full container mx-auto w-4xl py-2">
         <Outlet />
       </div>
     </AuthBoundary>

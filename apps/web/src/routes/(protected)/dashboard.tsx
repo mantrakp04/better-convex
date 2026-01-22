@@ -1,7 +1,6 @@
 import { api } from "@better-convex/backend/convex/_generated/api";
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import UserMenu from "@/components/auth/user-menu";
 import { convexQuery } from "@convex-dev/react-query";
 
 export const Route = createFileRoute("/(protected)/dashboard")({
@@ -12,10 +11,9 @@ function RouteComponent() {
   const privateData = useSuspenseQuery(convexQuery(api.privateData.get, {}));
 
   return (
-    <div className="container mx-auto flex max-w-3xl flex-col gap-2 p-2">
+    <div className="flex flex-col gap-1">
       <h1>Dashboard</h1>
       <p>privateData: {privateData.data?.message}</p>
-      <UserMenu />
     </div>
   );
 }

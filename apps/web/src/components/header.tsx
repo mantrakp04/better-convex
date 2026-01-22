@@ -6,9 +6,9 @@ export default function Header() {
   const location = useLocation();
 
   const links = [
-    { to: "/", label: "Home" },
-    { to: "/dashboard", label: "Dashboard" },
-    { to: "/settings", label: "Settings" },
+    { to: "", label: "Home" },
+    { to: "dashboard", label: "Dashboard" },
+    { to: "settings", label: "Settings" },
   ] as const;
 
   return (
@@ -18,7 +18,7 @@ export default function Header() {
     >
       <TabsList variant="line" className={`w-full justify-between`}>
         {links.map(({ to, label }) => (
-          <TabsTrigger key={to} value={to} onClick={() => navigate({ to })} className='cursor-pointer' >{label}</TabsTrigger>
+          <TabsTrigger key={to} value={to} onClick={() => navigate({ to: `/${to}` })} className='cursor-pointer' >{label}</TabsTrigger>
         ))}
       </TabsList>
     </Tabs>

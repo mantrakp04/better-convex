@@ -22,7 +22,7 @@ function RouteComponent() {
   ]
 
   return (
-    <Tabs className="container mx-auto w-4xl py-2" defaultValue={location.pathname.split('/').pop()}>
+    <Tabs defaultValue={location.pathname.split('/').pop()}>
       <TabsList>
         {paths.map(({ value, label }) => (
           <TabsTrigger key={value} value={value} onClick={() => handleChange(value)}>{label}</TabsTrigger>

@@ -1,6 +1,7 @@
 import { Tabs, TabsTrigger, TabsList } from '@/components/ui/tabs'
 import { createFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
 import { useCallback } from 'react'
+import OrganizationListDropdown from '@/components/auth/organization/organization-list-dropdown'
 
 export const Route = createFileRoute('/(protected)/settings/organization')({
   component: RouteComponent,
@@ -23,12 +24,15 @@ function RouteComponent() {
 
   return (
     <Tabs defaultValue={location.pathname.split('/').pop()}>
-      <TabsList>
-        {paths.map(({ value, label }) => (
-          <TabsTrigger key={value} value={value} onClick={() => handleChange(value)}>
-            {label}
-          </TabsTrigger>
-        ))}
+      <TabsList className="w-full justify-between bg-transparent">
+        <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
+          {paths.map(({ value, label }) => (
+            <TabsTrigger key={value} value={value} onClick={() => handleChange(value)}>
+              {label}
+            </TabsTrigger>
+          ))}
+        </div>
+        <OrganizationListDropdown />
       </TabsList>
       <Outlet />
     </Tabs>
