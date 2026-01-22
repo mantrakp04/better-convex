@@ -1,5 +1,8 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { WorkspaceProvider } from "@/providers/workspace";
+import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
+import { authClient } from "@/lib/auth-client";
+import { AuthBoundary } from "@convex-dev/better-auth/react";
+import { api } from "@better-convex/backend/convex/_generated/api";
+import { isAuthError } from "@/lib/utils";
 
 export const Route = createFileRoute("/(protected)")({
   beforeLoad: ({ context }) => {
@@ -11,11 +14,19 @@ export const Route = createFileRoute("/(protected)")({
 });
 
 function ProtectedLayout() {
+  const navigate = useNavigate();
+  
   return (
-    <WorkspaceProvider>
+    <AuthBoundary
+      authClient={authClient}
+      // This can do anything you like, a redirect is typical.
+      onUnauth={() => navigate({ to: "/auth" })}
+      getAuthUserFn={api.auth.getAuthUser}
+      isAuthError={isAuthError}
+    >
       <div className="flex-1 overflow-y-auto bg-background h-full">
         <Outlet />
       </div>
-    </WorkspaceProvider>
+    </AuthBoundary>
   );
 }

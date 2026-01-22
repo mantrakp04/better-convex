@@ -71,8 +71,7 @@ export function useTeams(organizationId?: string) {
     teams,
     isPending,
     createTeam: createMutation.mutateAsync,
-    updateTeam: (teamId: string, data: { name?: string }) =>
-      updateMutation.mutateAsync({ teamId, data }),
+    updateTeam: updateMutation.mutateAsync,
     deleteTeam: deleteMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,

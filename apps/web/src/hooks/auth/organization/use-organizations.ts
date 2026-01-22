@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -40,20 +39,5 @@ export function useCreateOrganization() {
   return {
     createOrganization: mutation.mutateAsync,
     isPending: mutation.isPending,
-  };
-}
-
-export function useActiveOrganization() {
-  const { data: activeOrganization, isPending, error } = authClient.useActiveOrganization();
-
-  const setActiveOrganization = useCallback(async (organizationId: string | null) => {
-    await authClient.organization.setActive({ organizationId });
-  }, []);
-
-  return {
-    activeOrganization,
-    isPending,
-    error,
-    setActiveOrganization,
   };
 }
