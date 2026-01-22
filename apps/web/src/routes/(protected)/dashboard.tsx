@@ -12,7 +12,7 @@ function RouteComponent() {
   const privateData = useSuspenseQuery(convexQuery(api.privateData.get, {}));
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-2">
+    <div className="container mx-auto flex max-w-3xl flex-col gap-2 p-2">
       <h1>Dashboard</h1>
       <p>privateData: {privateData.data?.message}</p>
       <UserMenu />

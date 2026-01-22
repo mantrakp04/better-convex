@@ -19,7 +19,7 @@ function RouteComponent() {
   const [showSignIn, setShowSignIn] = useState(false);
   
   return (
-    <div>
+    <div className="flex flex-col gap-2 p-2">
       {showSignIn ? (
         <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
       ) : (

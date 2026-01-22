@@ -47,8 +47,8 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
   });
 
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
-      <h1 className="mb-6 text-center text-3xl font-bold">Welcome Back</h1>
+    <div className="mx-auto flex w-full max-w-md flex-col gap-2 p-2">
+      <h1 className="text-center text-3xl font-bold">Welcome Back</h1>
 
       <form
         onSubmit={(e) => {
@@ -56,12 +56,12 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
           e.stopPropagation();
           form.handleSubmit();
         }}
-        className="space-y-4"
+        className="flex flex-col gap-2"
       >
-        <div>
+        <div className="flex flex-col gap-1">
           <form.Field name="email">
             {(field) => (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-1">
                 <Label htmlFor={field.name}>Email</Label>
                 <Input
                   id={field.name}
@@ -81,10 +81,10 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
           </form.Field>
         </div>
 
-        <div>
+        <div className="flex flex-col gap-1">
           <form.Field name="password">
             {(field) => (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-1">
                 <Label htmlFor={field.name}>Password</Label>
                 <Input
                   id={field.name}
@@ -117,12 +117,8 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
         </form.Subscribe>
       </form>
 
-      <div className="mt-4 text-center">
-        <Button
-          variant="link"
-          onClick={onSwitchToSignUp}
-          className="text-indigo-600 hover:text-indigo-800"
-        >
+      <div className="flex justify-center">
+        <Button variant="link" onClick={onSwitchToSignUp}>
           Need an account? Sign Up
         </Button>
       </div>
