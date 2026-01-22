@@ -1,17 +1,19 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useLocation } from "@tanstack/react-router";
 import { Tabs, TabsTrigger, TabsList } from "./ui/tabs";
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
+  
   const links = [
     { to: "/", label: "Home" },
     { to: "/dashboard", label: "Dashboard" },
-    { to: "/settings/organization", label: "Settings" },
+    { to: "/settings", label: "Settings" },
   ] as const;
 
   return (
     <Tabs
-      defaultValue={links[0].to}
+      defaultValue={location.pathname.split('/').pop()}
       className="container mx-auto w-4xl border border-border rounded-lg mt-2 px-.5"
     >
       <TabsList variant="line" className={`w-full justify-between`}>

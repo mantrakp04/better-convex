@@ -17,7 +17,10 @@ import { Route as protectedDashboardRouteImport } from './routes/(protected)/das
 import { Route as protectedSettingsRouteRouteImport } from './routes/(protected)/settings/route'
 import { Route as protectedSettingsIndexRouteImport } from './routes/(protected)/settings/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as protectedSettingsOrganizationRouteImport } from './routes/(protected)/settings/organization'
+import { Route as protectedSettingsOrganizationRouteRouteImport } from './routes/(protected)/settings/organization/route'
+import { Route as protectedSettingsOrganizationIndexRouteImport } from './routes/(protected)/settings/organization/index'
+import { Route as protectedSettingsOrganizationTeamsRouteImport } from './routes/(protected)/settings/organization/teams'
+import { Route as protectedSettingsOrganizationMembersRouteImport } from './routes/(protected)/settings/organization/members'
 
 const publicRouteRoute = publicRouteRouteImport.update({
   id: '/(public)',
@@ -57,11 +60,29 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const protectedSettingsOrganizationRoute =
-  protectedSettingsOrganizationRouteImport.update({
+const protectedSettingsOrganizationRouteRoute =
+  protectedSettingsOrganizationRouteRouteImport.update({
     id: '/organization',
     path: '/organization',
     getParentRoute: () => protectedSettingsRouteRoute,
+  } as any)
+const protectedSettingsOrganizationIndexRoute =
+  protectedSettingsOrganizationIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => protectedSettingsOrganizationRouteRoute,
+  } as any)
+const protectedSettingsOrganizationTeamsRoute =
+  protectedSettingsOrganizationTeamsRouteImport.update({
+    id: '/teams',
+    path: '/teams',
+    getParentRoute: () => protectedSettingsOrganizationRouteRoute,
+  } as any)
+const protectedSettingsOrganizationMembersRoute =
+  protectedSettingsOrganizationMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
+    getParentRoute: () => protectedSettingsOrganizationRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -69,17 +90,22 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
   '/': typeof publicIndexRoute
-  '/settings/organization': typeof protectedSettingsOrganizationRoute
+  '/settings/organization': typeof protectedSettingsOrganizationRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/settings/': typeof protectedSettingsIndexRoute
+  '/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
+  '/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
+  '/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
 }
 export interface FileRoutesByTo {
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
   '/': typeof publicIndexRoute
-  '/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/settings': typeof protectedSettingsIndexRoute
+  '/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
+  '/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
+  '/settings/organization': typeof protectedSettingsOrganizationIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,9 +115,12 @@ export interface FileRoutesById {
   '/(protected)/dashboard': typeof protectedDashboardRoute
   '/(public)/auth': typeof publicAuthRoute
   '/(public)/': typeof publicIndexRoute
-  '/(protected)/settings/organization': typeof protectedSettingsOrganizationRoute
+  '/(protected)/settings/organization': typeof protectedSettingsOrganizationRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/(protected)/settings/': typeof protectedSettingsIndexRoute
+  '/(protected)/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
+  '/(protected)/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
+  '/(protected)/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -103,14 +132,19 @@ export interface FileRouteTypes {
     | '/settings/organization'
     | '/api/auth/$'
     | '/settings/'
+    | '/settings/organization/members'
+    | '/settings/organization/teams'
+    | '/settings/organization/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/dashboard'
     | '/auth'
     | '/'
-    | '/settings/organization'
     | '/api/auth/$'
     | '/settings'
+    | '/settings/organization/members'
+    | '/settings/organization/teams'
+    | '/settings/organization'
   id:
     | '__root__'
     | '/(protected)'
@@ -122,6 +156,9 @@ export interface FileRouteTypes {
     | '/(protected)/settings/organization'
     | '/api/auth/$'
     | '/(protected)/settings/'
+    | '/(protected)/settings/organization/members'
+    | '/(protected)/settings/organization/teams'
+    | '/(protected)/settings/organization/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -192,20 +229,63 @@ declare module '@tanstack/react-router' {
       id: '/(protected)/settings/organization'
       path: '/organization'
       fullPath: '/settings/organization'
-      preLoaderRoute: typeof protectedSettingsOrganizationRouteImport
+      preLoaderRoute: typeof protectedSettingsOrganizationRouteRouteImport
       parentRoute: typeof protectedSettingsRouteRoute
+    }
+    '/(protected)/settings/organization/': {
+      id: '/(protected)/settings/organization/'
+      path: '/'
+      fullPath: '/settings/organization/'
+      preLoaderRoute: typeof protectedSettingsOrganizationIndexRouteImport
+      parentRoute: typeof protectedSettingsOrganizationRouteRoute
+    }
+    '/(protected)/settings/organization/teams': {
+      id: '/(protected)/settings/organization/teams'
+      path: '/teams'
+      fullPath: '/settings/organization/teams'
+      preLoaderRoute: typeof protectedSettingsOrganizationTeamsRouteImport
+      parentRoute: typeof protectedSettingsOrganizationRouteRoute
+    }
+    '/(protected)/settings/organization/members': {
+      id: '/(protected)/settings/organization/members'
+      path: '/members'
+      fullPath: '/settings/organization/members'
+      preLoaderRoute: typeof protectedSettingsOrganizationMembersRouteImport
+      parentRoute: typeof protectedSettingsOrganizationRouteRoute
     }
   }
 }
 
+interface protectedSettingsOrganizationRouteRouteChildren {
+  protectedSettingsOrganizationMembersRoute: typeof protectedSettingsOrganizationMembersRoute
+  protectedSettingsOrganizationTeamsRoute: typeof protectedSettingsOrganizationTeamsRoute
+  protectedSettingsOrganizationIndexRoute: typeof protectedSettingsOrganizationIndexRoute
+}
+
+const protectedSettingsOrganizationRouteRouteChildren: protectedSettingsOrganizationRouteRouteChildren =
+  {
+    protectedSettingsOrganizationMembersRoute:
+      protectedSettingsOrganizationMembersRoute,
+    protectedSettingsOrganizationTeamsRoute:
+      protectedSettingsOrganizationTeamsRoute,
+    protectedSettingsOrganizationIndexRoute:
+      protectedSettingsOrganizationIndexRoute,
+  }
+
+const protectedSettingsOrganizationRouteRouteWithChildren =
+  protectedSettingsOrganizationRouteRoute._addFileChildren(
+    protectedSettingsOrganizationRouteRouteChildren,
+  )
+
 interface protectedSettingsRouteRouteChildren {
-  protectedSettingsOrganizationRoute: typeof protectedSettingsOrganizationRoute
+  protectedSettingsOrganizationRouteRoute: typeof protectedSettingsOrganizationRouteRouteWithChildren
   protectedSettingsIndexRoute: typeof protectedSettingsIndexRoute
 }
 
 const protectedSettingsRouteRouteChildren: protectedSettingsRouteRouteChildren =
   {
-    protectedSettingsOrganizationRoute: protectedSettingsOrganizationRoute,
+    protectedSettingsOrganizationRouteRoute:
+      protectedSettingsOrganizationRouteRouteWithChildren,
     protectedSettingsIndexRoute: protectedSettingsIndexRoute,
   }
 
