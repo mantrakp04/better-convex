@@ -93,6 +93,7 @@ export const tables = {
     userId: v.string(),
     createdAt: v.optional(v.union(v.null(), v.number())),
   })
+    .index("teamId_userId", ["teamId","userId"])
     .index("teamId", ["teamId"])
     .index("userId", ["userId"]),
   member: defineTable({
@@ -101,6 +102,7 @@ export const tables = {
     role: v.string(),
     createdAt: v.number(),
   })
+    .index("organizationId_userId", ["organizationId","userId"])
     .index("organizationId", ["organizationId"])
     .index("userId", ["userId"])
     .index("role", ["role"]),

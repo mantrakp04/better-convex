@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { WorkspaceProvider } from "@/providers/workspace";
 
 export const Route = createFileRoute("/(protected)")({
   beforeLoad: ({ context }) => {
@@ -11,8 +12,10 @@ export const Route = createFileRoute("/(protected)")({
 
 function ProtectedLayout() {
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
-      <Outlet />
-    </div>
+    <WorkspaceProvider>
+      <div className="flex-1 overflow-y-auto bg-background">
+        <Outlet />
+      </div>
+    </WorkspaceProvider>
   );
 }

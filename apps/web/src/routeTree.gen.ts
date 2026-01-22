@@ -14,6 +14,8 @@ import { Route as protectedRouteRouteImport } from './routes/(protected)/route'
 import { Route as publicIndexRouteImport } from './routes/(public)/index'
 import { Route as publicAuthRouteImport } from './routes/(public)/auth'
 import { Route as protectedDashboardRouteImport } from './routes/(protected)/dashboard'
+import { Route as protectedSettingsRouteRouteImport } from './routes/(protected)/settings/route'
+import { Route as protectedSettingsIndexRouteImport } from './routes/(protected)/settings/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as protectedSettingsOrganizationRouteImport } from './routes/(protected)/settings/organization'
 
@@ -40,6 +42,16 @@ const protectedDashboardRoute = protectedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => protectedRouteRoute,
 } as any)
+const protectedSettingsRouteRoute = protectedSettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => protectedRouteRoute,
+} as any)
+const protectedSettingsIndexRoute = protectedSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => protectedSettingsRouteRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -47,17 +59,19 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 } as any)
 const protectedSettingsOrganizationRoute =
   protectedSettingsOrganizationRouteImport.update({
-    id: '/settings/organization',
-    path: '/settings/organization',
-    getParentRoute: () => protectedRouteRoute,
+    id: '/organization',
+    path: '/organization',
+    getParentRoute: () => protectedSettingsRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/settings': typeof protectedSettingsRouteRouteWithChildren
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
   '/': typeof publicIndexRoute
   '/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/settings/': typeof protectedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/dashboard': typeof protectedDashboardRoute
@@ -65,36 +79,49 @@ export interface FileRoutesByTo {
   '/': typeof publicIndexRoute
   '/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/settings': typeof protectedSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/(protected)': typeof protectedRouteRouteWithChildren
   '/(public)': typeof publicRouteRouteWithChildren
+  '/(protected)/settings': typeof protectedSettingsRouteRouteWithChildren
   '/(protected)/dashboard': typeof protectedDashboardRoute
   '/(public)/auth': typeof publicAuthRoute
   '/(public)/': typeof publicIndexRoute
   '/(protected)/settings/organization': typeof protectedSettingsOrganizationRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/(protected)/settings/': typeof protectedSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/settings'
     | '/dashboard'
     | '/auth'
     | '/'
     | '/settings/organization'
     | '/api/auth/$'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/dashboard' | '/auth' | '/' | '/settings/organization' | '/api/auth/$'
+  to:
+    | '/dashboard'
+    | '/auth'
+    | '/'
+    | '/settings/organization'
+    | '/api/auth/$'
+    | '/settings'
   id:
     | '__root__'
     | '/(protected)'
     | '/(public)'
+    | '/(protected)/settings'
     | '/(protected)/dashboard'
     | '/(public)/auth'
     | '/(public)/'
     | '/(protected)/settings/organization'
     | '/api/auth/$'
+    | '/(protected)/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -140,6 +167,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof protectedDashboardRouteImport
       parentRoute: typeof protectedRouteRoute
     }
+    '/(protected)/settings': {
+      id: '/(protected)/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof protectedSettingsRouteRouteImport
+      parentRoute: typeof protectedRouteRoute
+    }
+    '/(protected)/settings/': {
+      id: '/(protected)/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof protectedSettingsIndexRouteImport
+      parentRoute: typeof protectedSettingsRouteRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -149,22 +190,38 @@ declare module '@tanstack/react-router' {
     }
     '/(protected)/settings/organization': {
       id: '/(protected)/settings/organization'
-      path: '/settings/organization'
+      path: '/organization'
       fullPath: '/settings/organization'
       preLoaderRoute: typeof protectedSettingsOrganizationRouteImport
-      parentRoute: typeof protectedRouteRoute
+      parentRoute: typeof protectedSettingsRouteRoute
     }
   }
 }
 
-interface protectedRouteRouteChildren {
-  protectedDashboardRoute: typeof protectedDashboardRoute
+interface protectedSettingsRouteRouteChildren {
   protectedSettingsOrganizationRoute: typeof protectedSettingsOrganizationRoute
+  protectedSettingsIndexRoute: typeof protectedSettingsIndexRoute
+}
+
+const protectedSettingsRouteRouteChildren: protectedSettingsRouteRouteChildren =
+  {
+    protectedSettingsOrganizationRoute: protectedSettingsOrganizationRoute,
+    protectedSettingsIndexRoute: protectedSettingsIndexRoute,
+  }
+
+const protectedSettingsRouteRouteWithChildren =
+  protectedSettingsRouteRoute._addFileChildren(
+    protectedSettingsRouteRouteChildren,
+  )
+
+interface protectedRouteRouteChildren {
+  protectedSettingsRouteRoute: typeof protectedSettingsRouteRouteWithChildren
+  protectedDashboardRoute: typeof protectedDashboardRoute
 }
 
 const protectedRouteRouteChildren: protectedRouteRouteChildren = {
+  protectedSettingsRouteRoute: protectedSettingsRouteRouteWithChildren,
   protectedDashboardRoute: protectedDashboardRoute,
-  protectedSettingsOrganizationRoute: protectedSettingsOrganizationRoute,
 }
 
 const protectedRouteRouteWithChildren = protectedRouteRoute._addFileChildren(

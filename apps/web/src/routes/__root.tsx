@@ -15,6 +15,7 @@ import appCss from "../index.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
+import { seo } from '@/utils/seo'
 
 import Header from "../components/header";
 
@@ -39,13 +40,24 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         title: "My App",
-      }
+      },
+      ...seo({
+        title: "My App",
+        description: "My App Description",
+        keywords: "My App, My App Description",
+        image: "/logo.svg",
+      }),
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href: "/logo.svg",
+      }
     ],
   }),
 
