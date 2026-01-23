@@ -99,7 +99,7 @@ cp packages/backend/.env.local apps/web/.env
 4. Set up JWKS for auth token validation:
 
 ```bash
-bunx convex run auth:getLatestJwks | bunx convex env set JWKS
+cd packages/backend && bunx convex run auth:getLatestJwks | bunx convex env set JWKS
 ```
 
 5. Start the development server:
