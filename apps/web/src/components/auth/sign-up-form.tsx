@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
+import { useRefreshAuth } from "@/hooks/auth/use-refresh-auth";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -13,6 +14,7 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
   const navigate = useNavigate({
     from: "/",
   });
+  const refreshAuth = useRefreshAuth();
 
   const form = useForm({
     defaultValues: {
@@ -29,11 +31,11 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
         },
         {
           onSuccess: async () => {
-            new Promise((resolve) => setTimeout(resolve, 2000));
+            await refreshAuth();
+            toast.success("Sign up successful");
             navigate({
               to: "/dashboard",
             });
-            toast.success("Sign up successful");
           },
           onError: (error) => {
             toast.error(error.error.message || error.error.statusText);
