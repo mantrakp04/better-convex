@@ -4,9 +4,17 @@ import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { api } from "@better-convex/backend/convex/_generated/api";
 import { isAuthError } from "@/lib/utils";
 import { toast } from "sonner";
+import { convexQuery } from "@convex-dev/react-query";
 
 export const Route = createFileRoute("/(protected)")({
   component: ProtectedLayout,
+  loader: async ({ context }) => {
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        convexQuery(api.auth.getCurrentUser, {})
+      ),
+    ]);
+  },
 });
 
 function ProtectedLayout() {

@@ -6,6 +6,7 @@ export const env = createEnv({
   client: {
     VITE_CONVEX_URL: z.url(),
     VITE_CONVEX_SITE_URL: z.url(),
+    VITE_SITE_URL: z.url().default("http://localhost:3001"),
   },
   runtimeEnv: (import.meta as any).env,
   emptyStringAsUndefined: true,
