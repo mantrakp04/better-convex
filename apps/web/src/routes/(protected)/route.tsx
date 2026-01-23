@@ -1,39 +1,27 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { authClient } from "@/lib/auth-client";
-import { AuthBoundary } from "@convex-dev/better-auth/react";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { api } from "@better-convex/backend/convex/_generated/api";
-import { isAuthError } from "@/lib/utils";
-import { toast } from "sonner";
 import { convexQuery } from "@convex-dev/react-query";
 
 export const Route = createFileRoute("/(protected)")({
   component: ProtectedLayout,
   loader: async ({ context }) => {
-    await Promise.all([
+    const [user] = await Promise.all([
       context.queryClient.ensureQueryData(
         convexQuery(api.auth.getCurrentUser, {})
       ),
     ]);
+    if (!user) {
+      throw redirect({
+        to: "/auth",
+      });
+    }
   },
 });
 
 function ProtectedLayout() {
-  const navigate = useNavigate();
-
   return (
-    <AuthBoundary
-      authClient={authClient}
-      // This can do anything you like, a redirect is typical.
-      onUnauth={async () => {
-        await navigate({ to: "/auth" });
-        toast.error("You are not authorized to access this page");
-      }}
-      getAuthUserFn={api.auth.getAuthUser}
-      isAuthError={isAuthError}
-    >
-      <div className="flex-1 overflow-y-auto bg-background h-full container mx-auto w-4xl py-2">
-        <Outlet />
-      </div>
-    </AuthBoundary>
+    <div className="flex-1 overflow-y-auto bg-background h-full container mx-auto w-4xl py-2">
+      <Outlet />
+    </div>
   );
 }
