@@ -1,0 +1,223 @@
+---
+title: Queries & Mutations
+description: Learn how to read and write data with Convex queries and mutations
+---
+
+# Queries & Mutations
+
+Queries and mutations are the primary way to interact with your Convex database. This template enhances them with Zod validation and automatic auth context injection.
+
+## Queries
+
+Queries read data from the database. They are:
+- **Cached** - Results are cached until underlying data changes
+- **Reactive** - Frontend subscriptions automatically update
+- **Read-only** - Cannot modify database state
+
+### Basic Query
+
+```ts
+import { zQuery } from "../functions";
+import { z } from "zod";
+
+export const list = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    return await ctx.table("todos").collect();
+  },
+});
+```
+
+### Query with Arguments
+
+```ts
+export const getById = zQuery({
+  args: z.object({
+    id: z.string(), // Todo ID
+  }),
+  handler: async (ctx, args) => {
+    return await ctx.table("todos").get(args.id as Id<"todos">);
+  },
+});
+```
+
+### Query with Filters
+
+```ts
+export const listByStatus = zQuery({
+  args: z.object({
+    status: z.enum(["todo", "in_progress", "done"]),
+  }),
+  handler: async (ctx, args) => {
+    return await ctx.table("todos")
+      .filter((q) => q.eq(q.field("status"), args.status))
+      .collect();
+  },
+});
+```
+
+### Using Indexes
+
+Always use indexes for filtered queries to ensure performance:
+
+```ts
+export const listByOrganization = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Uses the "organizationId" index
+    return await ctx.table("todos", "organizationId", (q) =>
+      q.eq("organizationId", ctx.identity.activeOrganizationId)
+    ).collect();
+  },
+});
+```
+
+## Mutations
+
+Mutations modify data. They are:
+- **Transactional** - All changes succeed or all fail
+- **Trigger Re-evaluation** - Cause dependent queries to update
+- **Write-capable** - Can insert, update, and delete records
+
+### Basic Mutation
+
+```ts
+import { zMutation } from "../functions";
+import { z } from "zod";
+
+export const create = zMutation({
+  args: z.object({
+    title: z.string().min(1),
+    priority: z.enum(["low", "medium", "high"]).default("medium"),
+  }),
+  handler: async (ctx, args) => {
+    return await ctx.table("todos").insert({
+      title: args.title,
+      priority: args.priority,
+      status: "todo",
+      organizationId: ctx.identity.activeOrganizationId,
+      userId: ctx.identity.userId,
+    });
+  },
+});
+```
+
+### Update Mutation
+
+```ts
+export const update = zMutation({
+  args: z.object({
+    id: z.string(),
+    title: z.string().optional(),
+    status: z.enum(["todo", "in_progress", "done"]).optional(),
+    priority: z.enum(["low", "medium", "high"]).optional(),
+  }),
+  handler: async (ctx, args) => {
+    const { id, ...updates } = args;
+
+    const todo = await ctx.table("todos").get(id as Id<"todos">);
+    if (!todo) throw new Error("Todo not found");
+
+    // Verify ownership
+    if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Unauthorized");
+    }
+
+    return await ctx.table("todos").patch(id as Id<"todos">, {
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  },
+});
+```
+
+### Delete Mutation
+
+```ts
+export const remove = zMutation({
+  args: z.object({
+    id: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.id as Id<"todos">);
+    if (!todo) throw new Error("Todo not found");
+
+    if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Unauthorized");
+    }
+
+    await ctx.table("todos").delete(args.id as Id<"todos">);
+  },
+});
+```
+
+## Context Object
+
+The `ctx` object in handlers provides:
+
+| Property | Description |
+|----------|-------------|
+| `ctx.table(name)` | Access a table with Ents API |
+| `ctx.db` | Raw Convex database access |
+| `ctx.identity` | Current user's auth context |
+| `ctx.auth` | Auth utilities |
+
+### Identity Context
+
+When using `zQuery`/`zMutation`, the identity is automatically parsed:
+
+```ts
+ctx.identity = {
+  userId: "user_123",              // Better Auth user ID
+  activeOrganizationId: "org_456", // Current organization
+  activeTeamId: "team_789",        // Current team (optional)
+  organizationRole: "member",      // User's role in org
+};
+```
+
+## Best Practices
+
+### 1. Always Validate Ownership
+
+```ts
+// Check org membership before operations
+if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+  throw new Error("Unauthorized");
+}
+```
+
+### 2. Use Indexes for Filters
+
+```ts
+// Good: Uses index
+ctx.table("todos", "organizationId", (q) =>
+  q.eq("organizationId", orgId)
+);
+
+// Avoid: Full table scan
+ctx.table("todos").filter((q) =>
+  q.eq(q.field("organizationId"), orgId)
+);
+```
+
+### 3. Return Minimal Data
+
+```ts
+// Return only what the frontend needs
+return {
+  id: todo._id,
+  title: todo.title,
+  status: todo.status,
+};
+```
+
+### 4. Handle Errors Gracefully
+
+```ts
+const todo = await ctx.table("todos").get(args.id);
+if (!todo) {
+  throw new Error("Todo not found");
+}
+```
+
+Next, learn about [Schema Design](/docs/fundamentals/schema).

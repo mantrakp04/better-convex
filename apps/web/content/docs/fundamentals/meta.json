@@ -1,0 +1,4 @@
+{
+  "title": "Convex Fundamentals",
+  "pages": ["queries-mutations", "schema", "zod-validation", "actions"]
+}

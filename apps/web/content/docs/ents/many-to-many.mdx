@@ -1,0 +1,338 @@
+---
+title: Many-to-Many Relationships
+description: Implement many-to-many relationships using junction tables
+---
+
+# Many-to-Many Relationships
+
+Many-to-many relationships connect multiple records in one table to multiple records in another. This template demonstrates this with todos and assigned users.
+
+## Concept
+
+A todo can be assigned to multiple users, and a user can be assigned to multiple todos. This requires a **junction table** (also called a join table or associative table).
+
+```
+┌─────────┐     ┌──────────────────────┐     ┌─────────┐
+│  Todos  │────<│  TodoAssignedUsers   │>────│  Users  │
+└─────────┘     └──────────────────────┘     └─────────┘
+```
+
+## Schema Definition
+
+### Junction Table
+
+```ts
+// tables/todoAssignedUsers.ts
+import { defineEnt } from "convex-ents";
+import { v } from "convex/values";
+
+export const todoAssignedUsers = defineEnt({
+  todoId: v.id("todos"),
+  userId: v.string(),         // External user ID from auth
+  assignedBy: v.string(),     // Who assigned this user
+  assignedAt: v.number(),     // When assigned
+})
+  // Indexes for efficient lookups
+  .index("todoId", ["todoId"])
+  .index("userId", ["userId"])
+  .index("todoId_userId", ["todoId", "userId"])
+  // Edge back to the todo
+  .edge("todo");
+```
+
+### Parent Table
+
+```ts
+// tables/todos.ts
+export const todos = defineEnt({
+  title: v.string(),
+  status: v.union(
+    v.literal("todo"),
+    v.literal("in_progress"),
+    v.literal("done")
+  ),
+  organizationId: v.string(),
+  userId: v.string(),
+  // ... other fields
+})
+  .index("organizationId", ["organizationId"])
+  // Edge to junction table
+  .edges("todoAssignedUsers", { ref: true });
+```
+
+## CRUD Operations
+
+### Assign Users to a Todo
+
+```ts
+export const assignUsers = zMutation({
+  args: z.object({
+    todoId: z.string(),
+    userIds: z.array(z.string()),
+  }),
+  handler: async (ctx, args) => {
+    const todoId = args.todoId as Id<"todos">;
+    const todo = await ctx.table("todos").get(todoId);
+
+    if (!todo) throw new Error("Todo not found");
+    if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get existing assignments to avoid duplicates
+    const existing = await todo.edge("todoAssignedUsers");
+    const existingUserIds = new Set(existing.map((a) => a.userId));
+
+    // Filter to only new users
+    const newUserIds = args.userIds.filter((id) => !existingUserIds.has(id));
+
+    // Create assignments in parallel
+    await Promise.all(
+      newUserIds.map((userId) =>
+        ctx.table("todoAssignedUsers").insert({
+          todoId: todo._id,
+          userId,
+          assignedBy: ctx.identity.userId,
+          assignedAt: Date.now(),
+        })
+      )
+    );
+
+    return { assigned: newUserIds.length };
+  },
+});
+```
+
+### Remove User from a Todo
+
+```ts
+export const unassignUser = zMutation({
+  args: z.object({
+    todoId: z.string(),
+    userId: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    // Find the specific assignment
+    const assignment = await ctx
+      .table("todoAssignedUsers", "todoId_userId", (q) =>
+        q.eq("todoId", args.todoId as Id<"todos">).eq("userId", args.userId)
+      )
+      .unique();
+
+    if (!assignment) {
+      return { removed: false };
+    }
+
+    // Verify authorization through the todo
+    const todo = await assignment.edge("todo");
+    if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Unauthorized");
+    }
+
+    await ctx.table("todoAssignedUsers").delete(assignment._id);
+    return { removed: true };
+  },
+});
+```
+
+### Replace All Assignments
+
+```ts
+export const setAssignedUsers = zMutation({
+  args: z.object({
+    todoId: z.string(),
+    userIds: z.array(z.string()),
+  }),
+  handler: async (ctx, args) => {
+    const todoId = args.todoId as Id<"todos">;
+    const todo = await ctx.table("todos").get(todoId);
+
+    if (!todo) throw new Error("Todo not found");
+
+    // Get current assignments
+    const current = await todo.edge("todoAssignedUsers");
+    const currentUserIds = new Set(current.map((a) => a.userId));
+    const newUserIds = new Set(args.userIds);
+
+    // Users to remove
+    const toRemove = current.filter((a) => !newUserIds.has(a.userId));
+
+    // Users to add
+    const toAdd = args.userIds.filter((id) => !currentUserIds.has(id));
+
+    // Execute changes
+    await Promise.all([
+      // Remove old assignments
+      ...toRemove.map((a) => ctx.table("todoAssignedUsers").delete(a._id)),
+      // Add new assignments
+      ...toAdd.map((userId) =>
+        ctx.table("todoAssignedUsers").insert({
+          todoId: todo._id,
+          userId,
+          assignedBy: ctx.identity.userId,
+          assignedAt: Date.now(),
+        })
+      ),
+    ]);
+
+    return {
+      added: toAdd.length,
+      removed: toRemove.length,
+    };
+  },
+});
+```
+
+## Querying Many-to-Many
+
+### Get Todos with Assigned Users
+
+```ts
+export const listWithAssignees = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    const todos = await ctx
+      .table("todos", "organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      )
+      .collect();
+
+    // Load assignments for each todo
+    return await Promise.all(
+      todos.map(async (todo) => {
+        const assignments = await todo.edge("todoAssignedUsers");
+        return {
+          id: todo._id,
+          title: todo.title,
+          status: todo.status,
+          assignedUsers: assignments.map((a) => ({
+            userId: a.userId,
+            assignedAt: a.assignedAt,
+            assignedBy: a.assignedBy,
+          })),
+        };
+      })
+    );
+  },
+});
+```
+
+### Get Todos Assigned to a User
+
+```ts
+export const listAssignedToMe = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Find all assignments for current user
+    const myAssignments = await ctx
+      .table("todoAssignedUsers", "userId", (q) =>
+        q.eq("userId", ctx.identity.userId)
+      )
+      .collect();
+
+    // Get the todos
+    const todos = await Promise.all(
+      myAssignments.map((assignment) => assignment.edge("todo"))
+    );
+
+    // Filter by org and remove nulls
+    return todos.filter(
+      (todo) =>
+        todo && todo.organizationId === ctx.identity.activeOrganizationId
+    );
+  },
+});
+```
+
+### Count Assignments
+
+```ts
+export const getAssignmentStats = zQuery({
+  args: z.object({ todoId: z.string() }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.todoId as Id<"todos">);
+    if (!todo) throw new Error("Todo not found");
+
+    const assignments = await todo.edge("todoAssignedUsers");
+
+    return {
+      totalAssigned: assignments.length,
+      assignees: assignments.map((a) => a.userId),
+    };
+  },
+});
+```
+
+## Additional Junction Table Data
+
+Junction tables can store relationship-specific data:
+
+```ts
+defineEnt({
+  todoId: v.id("todos"),
+  userId: v.string(),
+  // Relationship metadata
+  assignedBy: v.string(),           // Who assigned
+  assignedAt: v.number(),           // When assigned
+  role: v.optional(v.string()),     // e.g., "owner", "reviewer"
+  notes: v.optional(v.string()),    // Assignment notes
+})
+```
+
+### Query with Relationship Data
+
+```ts
+export const getDetailedAssignments = zQuery({
+  args: z.object({ todoId: z.string() }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.todoId);
+    const assignments = await todo.edge("todoAssignedUsers");
+
+    return assignments.map((a) => ({
+      userId: a.userId,
+      role: a.role ?? "assignee",
+      assignedAt: a.assignedAt,
+      assignedBy: a.assignedBy,
+    }));
+  },
+});
+```
+
+## Performance Tips
+
+### 1. Use Composite Index for Unique Lookups
+
+```ts
+.index("todoId_userId", ["todoId", "userId"])
+```
+
+This allows efficient unique lookup:
+
+```ts
+const assignment = await ctx
+  .table("todoAssignedUsers", "todoId_userId", (q) =>
+    q.eq("todoId", todoId).eq("userId", userId)
+  )
+  .unique();
+```
+
+### 2. Batch Operations
+
+```ts
+// Good: Parallel operations
+await Promise.all(
+  userIds.map((userId) =>
+    ctx.table("todoAssignedUsers").insert({ todoId, userId, ... })
+  )
+);
+```
+
+### 3. Avoid Loading Unnecessary Data
+
+```ts
+// If you only need IDs, don't load full documents
+const assignments = await todo.edge("todoAssignedUsers");
+const userIds = assignments.map((a) => a.userId); // Just get what you need
+```
+
+Next, learn about [Authentication](/docs/auth/overview).

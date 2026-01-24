@@ -1,0 +1,208 @@
+---
+title: Roles & Permissions
+description: Role-based access control for organizations
+---
+
+# Roles & Permissions
+
+Better Auth provides built-in role-based access control (RBAC) for organizations.
+
+## Built-in Roles
+
+| Role | Description |
+|------|-------------|
+| `owner` | Full control, can delete organization |
+| `admin` | Can manage members and settings |
+| `member` | Standard access |
+
+## Checking Roles
+
+### In Convex Functions
+
+```ts
+export const deleteOrganization = zMutation({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Only owners can delete
+    if (ctx.identity.organizationRole !== "owner") {
+      throw new Error("Only owners can delete organizations");
+    }
+
+    // Proceed with deletion...
+  },
+});
+```
+
+### Role-Based Authorization Helper
+
+```ts
+// shared/auth_shared.ts
+export function requireRole(
+  identity: Identity,
+  allowedRoles: string[]
+): void {
+  if (!allowedRoles.includes(identity.organizationRole)) {
+    throw new Error(
+      `This action requires one of these roles: ${allowedRoles.join(", ")}`
+    );
+  }
+}
+
+// Usage
+export const updateSettings = zMutation({
+  args: z.object({ /* ... */ }),
+  handler: async (ctx, args) => {
+    requireRole(ctx.identity, ["owner", "admin"]);
+    // Only owners and admins reach here
+  },
+});
+```
+
+## Changing Member Roles
+
+```tsx
+async function updateMemberRole(
+  memberId: string,
+  role: "admin" | "member"
+) {
+  await authClient.organization.updateMemberRole({
+    memberId,
+    role,
+  });
+}
+```
+
+## Permission Patterns
+
+### Action-Based Permissions
+
+```ts
+const permissions = {
+  "todo:create": ["owner", "admin", "member"],
+  "todo:delete": ["owner", "admin"],
+  "settings:update": ["owner", "admin"],
+  "member:invite": ["owner", "admin"],
+  "member:remove": ["owner"],
+  "org:delete": ["owner"],
+};
+
+function canPerform(role: string, action: string): boolean {
+  return permissions[action]?.includes(role) ?? false;
+}
+
+// Usage in mutation
+export const deleteTodo = zMutation({
+  args: z.object({ id: z.string() }),
+  handler: async (ctx, args) => {
+    if (!canPerform(ctx.identity.organizationRole, "todo:delete")) {
+      throw new Error("Permission denied");
+    }
+    // ...
+  },
+});
+```
+
+### Resource-Based Permissions
+
+```ts
+export const updateTodo = zMutation({
+  args: z.object({ id: z.string(), title: z.string() }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.id);
+
+    // Check org membership
+    if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Not found");
+    }
+
+    // Owner/Admin can edit any todo
+    const isAdmin = ["owner", "admin"].includes(ctx.identity.organizationRole);
+
+    // Members can only edit their own todos
+    const isOwner = todo.userId === ctx.identity.userId;
+
+    if (!isAdmin && !isOwner) {
+      throw new Error("Permission denied");
+    }
+
+    return await ctx.table("todos").patch(args.id, { title: args.title });
+  },
+});
+```
+
+## Frontend Role Checks
+
+```tsx
+import { useSession } from "@/lib/auth";
+
+function AdminPanel() {
+  const { data: session } = useSession();
+  const role = session?.session.organizationRole;
+
+  if (role !== "owner" && role !== "admin") {
+    return null; // Hide from non-admins
+  }
+
+  return (
+    <div>
+      <h2>Admin Panel</h2>
+      {/* Admin-only content */}
+    </div>
+  );
+}
+```
+
+### Role-Based Button Visibility
+
+```tsx
+function TodoActions({ todo }) {
+  const { data: session } = useSession();
+  const role = session?.session.organizationRole;
+  const isOwner = todo.userId === session?.user.id;
+  const canDelete = role === "owner" || role === "admin" || isOwner;
+
+  return (
+    <div>
+      <button onClick={() => editTodo(todo.id)}>Edit</button>
+      {canDelete && (
+        <button onClick={() => deleteTodo(todo.id)}>Delete</button>
+      )}
+    </div>
+  );
+}
+```
+
+## Custom Roles
+
+For more complex RBAC, you can extend with custom roles:
+
+```ts
+// Store custom permissions in org settings
+organizationPermissions: defineEnt({
+  organizationId: v.string(),
+  userId: v.string(),
+  permissions: v.array(v.string()),
+}).index("organizationId_userId", ["organizationId", "userId"])
+
+// Check custom permissions
+export const checkPermission = zQuery({
+  args: z.object({ permission: z.string() }),
+  handler: async (ctx, args) => {
+    // Built-in admin roles have all permissions
+    if (["owner", "admin"].includes(ctx.identity.organizationRole)) {
+      return true;
+    }
+
+    const customPerms = await ctx
+      .table("organizationPermissions", "organizationId_userId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+          .eq("userId", ctx.identity.userId)
+      )
+      .unique();
+
+    return customPerms?.permissions.includes(args.permission) ?? false;
+  },
+});
+```
+
+Next, learn about [Aggregates](/docs/advanced/aggregates).

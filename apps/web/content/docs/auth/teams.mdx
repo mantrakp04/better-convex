@@ -1,0 +1,187 @@
+---
+title: Teams
+description: Sub-organization grouping with teams
+---
+
+# Teams
+
+Teams provide an additional layer of organization within an organization. They allow you to group members and scope data more granularly.
+
+## Team Model
+
+```
+Organization
+├── Team A
+│   ├── Member 1
+│   └── Member 2
+├── Team B
+│   └── Member 1
+└── Team C
+    └── Member 3
+```
+
+A user can belong to multiple teams within an organization.
+
+## Creating Teams
+
+```tsx
+async function createTeam(name: string) {
+  const result = await authClient.organization.createTeam({
+    name,
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+  return result.data;
+}
+```
+
+## Switching Teams
+
+```tsx
+async function switchTeam(teamId: string) {
+  await authClient.organization.setActiveTeam({
+    teamId,
+  });
+  // ctx.identity.activeTeamId now reflects this team
+}
+```
+
+## Team-Scoped Data
+
+### Schema with Team Support
+
+```ts
+defineEnt({
+  title: v.string(),
+  organizationId: v.string(),
+  userId: v.string(),
+  teamId: v.optional(v.string()), // Optional team scoping
+})
+  .index("organizationId", ["organizationId"])
+  .index("organizationId_teamId", ["organizationId", "teamId"])
+```
+
+### Querying by Team
+
+```ts
+export const listByTeam = zQuery({
+  args: z.object({
+    teamId: z.string().optional(),
+  }),
+  handler: async (ctx, args) => {
+    const { activeOrganizationId, activeTeamId } = ctx.identity;
+    const teamId = args.teamId ?? activeTeamId;
+
+    if (teamId) {
+      return await ctx
+        .table("todos", "organizationId_teamId", (q) =>
+          q.eq("organizationId", activeOrganizationId).eq("teamId", teamId)
+        )
+        .collect();
+    }
+
+    // No team filter - return all org todos
+    return await ctx
+      .table("todos", "organizationId", (q) =>
+        q.eq("organizationId", activeOrganizationId)
+      )
+      .collect();
+  },
+});
+```
+
+### Creating Team-Scoped Data
+
+```ts
+export const create = zMutation({
+  args: z.object({
+    title: z.string(),
+    teamId: z.string().optional(),
+  }),
+  handler: async (ctx, args) => {
+    return await ctx.table("todos").insert({
+      title: args.title,
+      status: "todo",
+      organizationId: ctx.identity.activeOrganizationId,
+      userId: ctx.identity.userId,
+      teamId: args.teamId ?? ctx.identity.activeTeamId,
+      updatedAt: Date.now(),
+    });
+  },
+});
+```
+
+## Listing Teams
+
+```tsx
+const { data: teams } = await authClient.organization.listTeams();
+```
+
+## Adding Members to Teams
+
+```tsx
+async function addMemberToTeam(teamId: string, memberId: string) {
+  await authClient.organization.addTeamMember({
+    teamId,
+    memberId,
+  });
+}
+```
+
+## Team Selector Component
+
+```tsx
+function TeamSelector() {
+  const { data: teams } = authClient.organization.useListTeams();
+  const { data: session } = useSession();
+  const activeTeam = session?.session.activeTeamId;
+
+  return (
+    <select
+      value={activeTeam || "all"}
+      onChange={(e) => {
+        const value = e.target.value;
+        if (value === "all") {
+          // Clear team filter
+          authClient.organization.setActiveTeam({ teamId: null });
+        } else {
+          authClient.organization.setActiveTeam({ teamId: value });
+        }
+      }}
+    >
+      <option value="all">All Teams</option>
+      {teams?.map((team) => (
+        <option key={team.id} value={team.id}>
+          {team.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+## Best Practices
+
+### 1. Make Teams Optional
+
+Not all data needs team scoping:
+
+```ts
+teamId: v.optional(v.string())
+```
+
+### 2. Default to Active Team
+
+```ts
+teamId: args.teamId ?? ctx.identity.activeTeamId
+```
+
+### 3. Index for Team Queries
+
+```ts
+.index("organizationId_teamId", ["organizationId", "teamId"])
+```
+
+Next, learn about [Roles](/docs/auth/roles).

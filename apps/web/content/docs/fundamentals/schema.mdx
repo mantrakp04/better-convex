@@ -1,0 +1,192 @@
+---
+title: Schema Design
+description: Define your database schema with Convex validators
+---
+
+# Schema Design
+
+Convex uses a schema to define your database structure. This template uses Convex Ents for enhanced type safety and relationships.
+
+## Basic Schema
+
+A Convex schema defines tables and their fields using validators:
+
+```ts
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  todos: defineTable({
+    title: v.string(),
+    status: v.union(
+      v.literal("todo"),
+      v.literal("in_progress"),
+      v.literal("done")
+    ),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high")
+    ),
+    dueDate: v.optional(v.number()),
+    organizationId: v.string(),
+    userId: v.string(),
+    teamId: v.optional(v.string()),
+    updatedAt: v.number(),
+  }),
+});
+```
+
+## Validators
+
+Convex provides built-in validators for type safety:
+
+| Validator | TypeScript Type | Description |
+|-----------|-----------------|-------------|
+| `v.string()` | `string` | String value |
+| `v.number()` | `number` | Number (int or float) |
+| `v.boolean()` | `boolean` | Boolean value |
+| `v.null()` | `null` | Null value |
+| `v.id("tableName")` | `Id<"tableName">` | Reference to another document |
+| `v.array(v.string())` | `string[]` | Array of values |
+| `v.object({...})` | `{...}` | Nested object |
+| `v.optional(v.string())` | `string \| undefined` | Optional field |
+| `v.union(v.literal("a"), v.literal("b"))` | `"a" \| "b"` | Union type |
+
+## Indexes
+
+Indexes are crucial for query performance. Define them in your schema:
+
+```ts
+defineTable({
+  title: v.string(),
+  status: v.string(),
+  organizationId: v.string(),
+  userId: v.string(),
+  teamId: v.optional(v.string()),
+})
+  // Single-field indexes
+  .index("organizationId", ["organizationId"])
+  .index("userId", ["userId"])
+
+  // Composite indexes for filtering
+  .index("organizationId_status", ["organizationId", "status"])
+  .index("organizationId_userId", ["organizationId", "userId"])
+  .index("organizationId_teamId", ["organizationId", "teamId"])
+```
+
+### Index Usage Guidelines
+
+1. **Query by exact match**: Index fields in the order you filter them
+2. **Range queries**: Put the range field last in the index
+3. **Sorting**: Include sort fields after filter fields
+
+```ts
+// This query uses "organizationId_status" index
+ctx.db.query("todos")
+  .withIndex("organizationId_status", (q) =>
+    q.eq("organizationId", orgId).eq("status", "todo")
+  )
+  .collect();
+```
+
+## Schema with Convex Ents
+
+This template uses Convex Ents for relationship management. Here's how the todo table is defined:
+
+```ts
+// tables/todos.ts
+import { defineEnt, defineEntSchema, getEntDefinitions } from "convex-ents";
+import { v } from "convex/values";
+
+const entSchema = defineEntSchema({
+  todos: defineEnt({
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(
+      v.literal("todo"),
+      v.literal("in_progress"),
+      v.literal("done")
+    ),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high")
+    ),
+    dueDate: v.optional(v.number()),
+    organizationId: v.string(),
+    userId: v.string(),
+    teamId: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("organizationId", ["organizationId"])
+    .index("organizationId_userId", ["organizationId", "userId"])
+    .index("organizationId_teamId", ["organizationId", "teamId"])
+    .index("userId", ["userId"])
+    // Define edge to junction table
+    .edges("todoAssignedUsers", { ref: true }),
+
+  todoAssignedUsers: defineEnt({
+    todoId: v.id("todos"),
+    userId: v.string(),
+    assignedBy: v.string(),
+    assignedAt: v.number(),
+  })
+    .index("userId", ["userId"])
+    .index("todoId_userId", ["todoId", "userId"])
+    .edge("todo"),
+});
+
+export const entDefinitions = getEntDefinitions(entSchema);
+```
+
+## Generated Types
+
+After defining your schema, Convex generates TypeScript types:
+
+```ts
+// _generated/dataModel.d.ts
+export type Doc<TableName extends TableNames> = {
+  todos: {
+    _id: Id<"todos">;
+    _creationTime: number;
+    title: string;
+    status: "todo" | "in_progress" | "done";
+    priority: "low" | "medium" | "high";
+    // ... other fields
+  };
+};
+```
+
+Use these types in your code:
+
+```ts
+import { Doc, Id } from "./_generated/dataModel";
+
+type Todo = Doc<"todos">;
+type TodoId = Id<"todos">;
+```
+
+## Schema Migrations
+
+When you change your schema:
+
+1. **Adding fields**: Add with `v.optional()` first, then backfill
+2. **Removing fields**: Deploy removal, data remains until cleaned
+3. **Changing types**: Create migration mutation to transform data
+
+```ts
+// Migration example: Add default updatedAt
+export const migrateUpdatedAt = internalMutation({
+  handler: async (ctx) => {
+    const todos = await ctx.db.query("todos").collect();
+    for (const todo of todos) {
+      if (!todo.updatedAt) {
+        await ctx.db.patch(todo._id, { updatedAt: todo._creationTime });
+      }
+    }
+  },
+});
+```
+
+Next, learn about [Zod Validation](/docs/fundamentals/zod-validation).

@@ -1,8 +1,53 @@
 ---
-title: Hello World
-description: Welcome to the documentation
+title: Better Convex Template
+description: A production-ready, organization-focused full-stack template built with Convex
 ---
 
-# Welcome
+# Better Convex Template
 
-This is your documentation homepage.
+A production-ready, organization-focused full-stack template demonstrating advanced Convex patterns for building multi-tenant SaaS applications.
+
+## What You'll Learn
+
+This documentation teaches you how to build scalable applications with Convex by covering:
+
+- **Convex Fundamentals** - Queries, mutations, actions, and schema design
+- **Convex Ents** - Type-safe relationships and entity management
+- **Authentication** - Better Auth integration with organizations and teams
+- **Real-time Statistics** - Aggregates for instant analytics
+- **Frontend Integration** - TanStack Query with Convex for reactive UIs
+
+## Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | Convex, Convex Ents, Better Auth, Zod |
+| **Frontend** | React 19, TanStack Start, TanStack Query |
+| **Styling** | TailwindCSS v4, shadcn/ui |
+| **Build** | Bun, Turborepo, Vite |
+
+## Template Features
+
+The template includes a fully-featured todo application demonstrating:
+
+- Multi-tenant architecture with organization/team scoping
+- Real-time data synchronization
+- Cursor-based pagination for scale
+- Role-based access control
+- Dashboard with live statistics
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone <repo-url>
+bun install
+
+# Set up Convex
+bunx convex dev
+
+# Start the development server
+bun dev
+```
+
+Ready to dive in? Start with the [Introduction](/docs/getting-started/introduction).

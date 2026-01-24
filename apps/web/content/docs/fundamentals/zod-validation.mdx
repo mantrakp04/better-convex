@@ -1,0 +1,256 @@
+---
+title: Zod Validation
+description: Runtime validation with Zod schemas for type-safe arguments
+---
+
+# Zod Validation
+
+This template uses `convex-helpers/server/zod4` to add Zod validation to Convex functions. This provides runtime validation and excellent TypeScript inference.
+
+## Why Zod with Convex?
+
+1. **Runtime Validation** - Validate arguments before they reach your handler
+2. **Better Errors** - Detailed validation error messages
+3. **Type Inference** - Zod schemas infer TypeScript types automatically
+4. **Reusable Schemas** - Share validation logic between functions
+
+## Setting Up zQuery and zMutation
+
+The template creates custom function factories in `functions.ts`:
+
+```ts
+import { zCustomQuery, zCustomMutation } from "convex-helpers/server/zod4";
+import { query, mutation } from "./_generated/server";
+
+// Base Convex functions
+const baseQuery = query;
+const baseMutation = mutation;
+
+// Enhanced with auth context
+export const zQuery = zCustomQuery(baseQuery, {
+  input: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+
+    const parsed = parseIdentity(identity);
+    return {
+      ctx: {
+        ...ctx,
+        table: entsTableFactory(ctx, entDefinitions),
+        identity: parsed,
+      },
+    };
+  },
+});
+
+export const zMutation = zCustomMutation(baseMutation, {
+  input: async (ctx) => {
+    // Same auth injection as zQuery
+  },
+});
+```
+
+## Defining Schemas
+
+Create reusable Zod schemas for your function arguments:
+
+```ts
+// todos/types.ts
+import { z } from "zod";
+
+export const TodoStatus = z.enum(["todo", "in_progress", "done"]);
+export const TodoPriority = z.enum(["low", "medium", "high"]);
+
+export const CreateTodoArgs = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  description: z.string().max(1000).optional(),
+  priority: TodoPriority.default("medium"),
+  dueDate: z.number().optional(),
+  teamId: z.string().optional(),
+});
+
+export const UpdateTodoArgs = z.object({
+  id: z.string(),
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(1000).optional(),
+  status: TodoStatus.optional(),
+  priority: TodoPriority.optional(),
+  dueDate: z.number().nullable().optional(),
+});
+
+export const TodoFilters = z.object({
+  status: TodoStatus.optional(),
+  priority: TodoPriority.optional(),
+  teamId: z.string().optional(),
+  userId: z.string().optional(),
+  search: z.string().optional(),
+});
+```
+
+## Using Schemas in Functions
+
+```ts
+// todos/functions.ts
+import { zQuery, zMutation } from "../functions";
+import { CreateTodoArgs, UpdateTodoArgs, TodoFilters } from "./types";
+import { zPaginationOpts } from "convex-helpers/server/pagination";
+import { z } from "zod";
+
+export const list = zQuery({
+  args: z.object({
+    filters: TodoFilters,
+    paginationOpts: zPaginationOpts,
+  }),
+  handler: async (ctx, args) => {
+    const { filters, paginationOpts } = args;
+
+    let query = ctx.table("todos", "organizationId", (q) =>
+      q.eq("organizationId", ctx.identity.activeOrganizationId)
+    );
+
+    // Apply filters
+    if (filters.status) {
+      query = query.filter((q) => q.eq(q.field("status"), filters.status));
+    }
+    if (filters.priority) {
+      query = query.filter((q) => q.eq(q.field("priority"), filters.priority));
+    }
+
+    return await query.paginate(paginationOpts);
+  },
+});
+
+export const create = zMutation({
+  args: CreateTodoArgs,
+  handler: async (ctx, args) => {
+    return await ctx.table("todos").insert({
+      ...args,
+      status: "todo",
+      organizationId: ctx.identity.activeOrganizationId,
+      userId: ctx.identity.userId,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const update = zMutation({
+  args: UpdateTodoArgs,
+  handler: async (ctx, args) => {
+    const { id, ...updates } = args;
+
+    const todo = await ctx.table("todos").get(id);
+    if (!todo || todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Todo not found");
+    }
+
+    return await ctx.table("todos").patch(id, {
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  },
+});
+```
+
+## Pagination with Zod
+
+Use `zPaginationOpts` for cursor-based pagination:
+
+```ts
+import { zPaginationOpts } from "convex-helpers/server/pagination";
+
+export const ListArgs = z.object({
+  filters: TodoFilters,
+  paginationOpts: zPaginationOpts,
+});
+
+// In handler
+const results = await query.paginate(args.paginationOpts);
+return results;
+```
+
+## Common Zod Patterns
+
+### Optional with Default
+
+```ts
+z.object({
+  priority: z.enum(["low", "medium", "high"]).default("medium"),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+```
+
+### Nullable vs Optional
+
+```ts
+z.object({
+  // Can be undefined (omitted)
+  teamId: z.string().optional(),
+
+  // Can be null (explicitly set to null)
+  dueDate: z.number().nullable(),
+
+  // Can be undefined, null, or a value
+  description: z.string().nullable().optional(),
+});
+```
+
+### Transformations
+
+```ts
+z.object({
+  // Trim whitespace
+  title: z.string().trim().min(1),
+
+  // Transform to lowercase
+  email: z.string().email().toLowerCase(),
+
+  // Coerce string to number
+  limit: z.coerce.number().int().positive(),
+});
+```
+
+### Refinements
+
+```ts
+z.object({
+  startDate: z.number(),
+  endDate: z.number(),
+}).refine(
+  (data) => data.endDate > data.startDate,
+  { message: "End date must be after start date" }
+);
+```
+
+## Error Handling
+
+Zod validation errors are thrown before your handler runs:
+
+```ts
+// Frontend handling
+try {
+  await createTodo({ title: "" }); // Empty title
+} catch (error) {
+  // Error: "Title is required"
+}
+```
+
+## Type Inference
+
+Zod schemas automatically infer TypeScript types:
+
+```ts
+import { z } from "zod";
+
+const CreateTodoArgs = z.object({
+  title: z.string(),
+  priority: z.enum(["low", "medium", "high"]),
+});
+
+// Infer the type
+type CreateTodoInput = z.infer<typeof CreateTodoArgs>;
+// { title: string; priority: "low" | "medium" | "high" }
+```
+
+Next, learn about [Actions](/docs/fundamentals/actions).

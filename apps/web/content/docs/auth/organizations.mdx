@@ -1,0 +1,164 @@
+---
+title: Organizations
+description: Multi-tenant organization management with Better Auth
+---
+
+# Organizations
+
+Organizations enable multi-tenant functionality where users can belong to multiple organizations and switch between them.
+
+## Organization Model
+
+Each organization has:
+- Unique ID and name
+- Owner (user who created it)
+- Members with roles
+- Teams (optional sub-groups)
+
+## Creating Organizations
+
+### On Sign Up (Automatic)
+
+A personal organization is created automatically when a user signs up:
+
+```ts
+// In auth.ts databaseHooks
+user: {
+  create: {
+    after: async (user) => {
+      await createPersonalOrganization(user);
+    },
+  },
+},
+```
+
+### Manual Creation
+
+```tsx
+import { authClient } from "@/lib/auth";
+
+async function createOrganization(name: string) {
+  const result = await authClient.organization.create({
+    name,
+    slug: name.toLowerCase().replace(/\s+/g, "-"),
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+  return result.data;
+}
+```
+
+## Switching Organizations
+
+```tsx
+async function switchOrganization(organizationId: string) {
+  await authClient.organization.setActive({
+    organizationId,
+  });
+  // Session now has new activeOrganizationId
+  // All Convex queries will use the new org context
+}
+```
+
+### Organization Switcher Component
+
+```tsx
+function OrganizationSwitcher() {
+  const { data: session } = useSession();
+  const { data: organizations } = authClient.useListOrganizations();
+  const activeOrg = session?.session.activeOrganizationId;
+
+  return (
+    <select
+      value={activeOrg || ""}
+      onChange={(e) => switchOrganization(e.target.value)}
+    >
+      {organizations?.map((org) => (
+        <option key={org.id} value={org.id}>
+          {org.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+## Data Isolation
+
+All queries automatically scope to the active organization:
+
+```ts
+export const list = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Only returns todos from active org
+    return await ctx
+      .table("todos", "organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      )
+      .collect();
+  },
+});
+```
+
+### Creating Org-Scoped Data
+
+```ts
+export const create = zMutation({
+  args: z.object({ title: z.string() }),
+  handler: async (ctx, args) => {
+    return await ctx.table("todos").insert({
+      title: args.title,
+      status: "todo",
+      organizationId: ctx.identity.activeOrganizationId,
+      userId: ctx.identity.userId,
+      updatedAt: Date.now(),
+    });
+  },
+});
+```
+
+## Inviting Members
+
+```tsx
+async function inviteUser(email: string, role: "member" | "admin") {
+  const result = await authClient.organization.inviteMember({
+    email,
+    role,
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+  // Invitation email sent
+}
+```
+
+## Listing Members
+
+```tsx
+const { data: members } = await authClient.organization.listMembers();
+// [{ userId, role, user: { name, email } }, ...]
+```
+
+## Best Practices
+
+### 1. Always Validate Org Access
+
+```ts
+const todo = await ctx.table("todos").get(todoId);
+if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+  throw new Error("Unauthorized");
+}
+```
+
+### 2. Index by Organization
+
+```ts
+.index("organizationId", ["organizationId"])
+.index("organizationId_status", ["organizationId", "status"])
+```
+
+Next, learn about [Teams](/docs/auth/teams).

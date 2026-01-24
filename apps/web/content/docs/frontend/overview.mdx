@@ -1,0 +1,198 @@
+---
+title: Frontend Overview
+description: Integrating Convex with React and TanStack
+---
+
+# Frontend Overview
+
+This template uses a powerful combination of React 19, TanStack Start, TanStack Query, and Convex for a fully type-safe, reactive frontend.
+
+## Tech Stack
+
+| Library | Purpose |
+|---------|---------|
+| React 19 | UI library |
+| TanStack Start | SSR framework with file-based routing |
+| TanStack Query | Server state management |
+| @convex-dev/react-query | Convex + TanStack Query bridge |
+| Convex React | Core Convex React bindings |
+
+## Project Structure
+
+```
+apps/web/src/
+├── routes/              # File-based routing
+│   ├── __root.tsx       # Root layout with providers
+│   ├── index.tsx        # Home page
+│   └── dashboard/       # Dashboard routes
+├── components/          # React components
+│   ├── ui/              # shadcn/ui components
+│   └── ...              # Feature components
+├── hooks/               # Custom hooks
+│   └── useTodos.ts      # Convex query hooks
+└── lib/                 # Utilities
+    ├── convex.ts        # Convex client setup
+    └── auth.ts          # Auth client setup
+```
+
+## Setting Up Providers
+
+### Root Layout
+
+```tsx
+// routes/__root.tsx
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ConvexQueryClient } from "@convex-dev/react-query";
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
+const convexQueryClient = new ConvexQueryClient(convex);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      queryKeyHashFn: convexQueryClient.hashFn(),
+      queryFn: convexQueryClient.queryFn(),
+    },
+  },
+});
+convexQueryClient.connect(queryClient);
+
+export function RootLayout({ children }) {
+  return (
+    <ConvexProvider client={convex}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </ConvexProvider>
+  );
+}
+```
+
+## Basic Usage
+
+### Queries
+
+```tsx
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function TodoList() {
+  const todos = useQuery(api.todos.list, { filters: {} });
+
+  if (todos === undefined) return <Loading />;
+
+  return (
+    <ul>
+      {todos.map((todo) => (
+        <li key={todo._id}>{todo.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Mutations
+
+```tsx
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function CreateTodo() {
+  const create = useMutation(api.todos.create);
+
+  const handleSubmit = async (title: string) => {
+    await create({ title, priority: "medium" });
+  };
+
+  return <TodoForm onSubmit={handleSubmit} />;
+}
+```
+
+## Type Safety
+
+Types flow from your Convex schema to the frontend:
+
+```tsx
+import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
+
+// Type is inferred from api.todos.list return type
+const todos = useQuery(api.todos.list, { filters: {} });
+
+// Explicit type for a todo document
+type Todo = Doc<"todos">;
+
+function TodoItem({ todo }: { todo: Todo }) {
+  // todo.title is typed as string
+  // todo.status is typed as "todo" | "in_progress" | "done"
+  return <div>{todo.title}</div>;
+}
+```
+
+## Conditional Queries
+
+Skip queries based on conditions:
+
+```tsx
+function UserTodos({ userId }: { userId: string | null }) {
+  // Query only runs when userId is truthy
+  const todos = useQuery(
+    api.todos.listByUser,
+    userId ? { userId } : "skip"
+  );
+
+  if (!userId) return <p>Select a user</p>;
+  if (todos === undefined) return <Loading />;
+
+  return <TodoList todos={todos} />;
+}
+```
+
+## Real-Time Updates
+
+Convex queries are reactive by default:
+
+```tsx
+function LiveTodoCount() {
+  // Automatically updates when any todo changes
+  const stats = useQuery(api.todos.stats.getOrgStats);
+
+  return <span>Total: {stats?.total ?? 0}</span>;
+}
+```
+
+## Error Handling
+
+```tsx
+function TodoList() {
+  const todos = useQuery(api.todos.list, { filters: {} });
+
+  // Handle loading
+  if (todos === undefined) {
+    return <LoadingSkeleton />;
+  }
+
+  // Handle empty state
+  if (todos.length === 0) {
+    return <EmptyState />;
+  }
+
+  return <ul>{/* ... */}</ul>;
+}
+```
+
+### With Error Boundaries
+
+```tsx
+import { ErrorBoundary } from "react-error-boundary";
+
+function App() {
+  return (
+    <ErrorBoundary fallback={<ErrorFallback />}>
+      <TodoList />
+    </ErrorBoundary>
+  );
+}
+```
+
+Next, learn about [TanStack Query Integration](/docs/frontend/tanstack-query).

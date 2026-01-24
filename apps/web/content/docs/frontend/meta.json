@@ -1,0 +1,4 @@
+{
+  "title": "Frontend Integration",
+  "pages": ["overview", "tanstack-query", "hooks", "optimistic-updates"]
+}

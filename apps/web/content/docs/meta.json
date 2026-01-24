@@ -1,0 +1,16 @@
+{
+  "title": "Documentation",
+  "root": true,
+  "pages": [
+    "index",
+    "installation",
+    "getting-started",
+    "fundamentals",
+    "ents",
+    "auth",
+    "frontend",
+    "advanced",
+    "databuddy",
+    "deployment"
+  ]
+}

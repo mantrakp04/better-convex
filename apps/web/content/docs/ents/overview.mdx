@@ -1,0 +1,249 @@
+---
+title: Convex Ents Overview
+description: Type-safe entity relationships for Convex
+---
+
+# Convex Ents Overview
+
+Convex Ents is a library that adds type-safe entity relationships to Convex, similar to an ORM but designed specifically for Convex's reactive model.
+
+## Why Convex Ents?
+
+### Without Ents (Manual Relationships)
+
+```ts
+// Query todos with assigned users - manual approach
+const todos = await ctx.db.query("todos").collect();
+
+// Manually fetch related data for each todo
+const todosWithUsers = await Promise.all(
+  todos.map(async (todo) => {
+    const assignments = await ctx.db
+      .query("todoAssignedUsers")
+      .withIndex("todoId", (q) => q.eq("todoId", todo._id))
+      .collect();
+
+    const users = await Promise.all(
+      assignments.map((a) => ctx.db.get(a.userId))
+    );
+
+    return { ...todo, assignedUsers: users };
+  })
+);
+```
+
+### With Ents (Declarative Relationships)
+
+```ts
+// Same query with Ents
+const todos = await ctx.table("todos").collect();
+
+const todosWithUsers = await Promise.all(
+  todos.map(async (todo) => ({
+    ...todo,
+    assignedUsers: await todo.edge("assignedUsers"),
+  }))
+);
+```
+
+## Setting Up Ents
+
+### 1. Define Entity Schema
+
+```ts
+// tables/todos.ts
+import { defineEnt, defineEntSchema, getEntDefinitions } from "convex-ents";
+import { v } from "convex/values";
+
+const entSchema = defineEntSchema({
+  todos: defineEnt({
+    title: v.string(),
+    status: v.union(
+      v.literal("todo"),
+      v.literal("in_progress"),
+      v.literal("done")
+    ),
+    organizationId: v.string(),
+    userId: v.string(),
+  })
+    .index("organizationId", ["organizationId"])
+    .edges("todoAssignedUsers", { ref: true }),
+
+  todoAssignedUsers: defineEnt({
+    todoId: v.id("todos"),
+    userId: v.string(),
+    assignedAt: v.number(),
+  })
+    .index("todoId_userId", ["todoId", "userId"])
+    .edge("todo"),
+});
+
+export const entDefinitions = getEntDefinitions(entSchema);
+```
+
+### 2. Create Table Factory
+
+```ts
+// functions.ts
+import { entsTableFactory } from "convex-ents";
+import { entDefinitions } from "./tables/todos";
+
+export const zQuery = zCustomQuery(baseQuery, {
+  input: async (ctx) => ({
+    ctx: {
+      ...ctx,
+      table: entsTableFactory(ctx, entDefinitions),
+    },
+  }),
+});
+```
+
+### 3. Use in Functions
+
+```ts
+export const list = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // ctx.table provides Ents API
+    return await ctx.table("todos").collect();
+  },
+});
+```
+
+## Core Concepts
+
+### Tables
+
+Access tables through `ctx.table()`:
+
+```ts
+// Get all documents
+const todos = await ctx.table("todos").collect();
+
+// Get by ID
+const todo = await ctx.table("todos").get(todoId);
+
+// Query with index
+const orgTodos = await ctx.table("todos", "organizationId", (q) =>
+  q.eq("organizationId", orgId)
+).collect();
+```
+
+### Documents (Ents)
+
+Each document returned by Ents has additional methods:
+
+```ts
+const todo = await ctx.table("todos").get(todoId);
+
+// Navigate edges
+const assignedUsers = await todo.edge("assignedUsers");
+
+// Get document data
+const { title, status } = todo;
+
+// Get ID
+const id = todo._id;
+```
+
+### Edges
+
+Edges define relationships between tables:
+
+```ts
+// One-to-many: Todo has many assigned users
+.edges("todoAssignedUsers", { ref: true })
+
+// Many-to-one: Assignment belongs to a todo
+.edge("todo")
+```
+
+## Table Operations
+
+### Insert
+
+```ts
+const todoId = await ctx.table("todos").insert({
+  title: "New todo",
+  status: "todo",
+  organizationId: ctx.identity.activeOrganizationId,
+  userId: ctx.identity.userId,
+});
+```
+
+### Patch (Update)
+
+```ts
+await ctx.table("todos").patch(todoId, {
+  status: "done",
+  updatedAt: Date.now(),
+});
+```
+
+### Delete
+
+```ts
+await ctx.table("todos").delete(todoId);
+```
+
+### Get by ID
+
+```ts
+const todo = await ctx.table("todos").get(todoId);
+if (!todo) throw new Error("Not found");
+```
+
+### Get or Throw
+
+```ts
+// Throws if not found
+const todo = await ctx.table("todos").getX(todoId);
+```
+
+## Querying
+
+### Basic Query
+
+```ts
+const todos = await ctx.table("todos").collect();
+```
+
+### With Index
+
+```ts
+const todos = await ctx.table("todos", "organizationId", (q) =>
+  q.eq("organizationId", orgId)
+).collect();
+```
+
+### With Filter
+
+```ts
+const doneTodos = await ctx.table("todos")
+  .filter((q) => q.eq(q.field("status"), "done"))
+  .collect();
+```
+
+### Order and Limit
+
+```ts
+const recentTodos = await ctx.table("todos")
+  .order("desc") // by _creationTime
+  .take(10);
+```
+
+### First/Unique
+
+```ts
+// Get first match
+const firstTodo = await ctx.table("todos", "organizationId", (q) =>
+  q.eq("organizationId", orgId)
+).first();
+
+// Get unique (throws if multiple)
+const uniqueTodo = await ctx.table("todos", "someUniqueIndex", (q) =>
+  q.eq("uniqueField", value)
+).unique();
+```
+
+Next, learn about [Edges](/docs/ents/edges).

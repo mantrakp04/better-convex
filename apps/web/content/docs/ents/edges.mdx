@@ -1,0 +1,306 @@
+---
+title: Edges
+description: Define and navigate relationships between entities
+---
+
+# Edges
+
+Edges in Convex Ents define relationships between tables. They provide type-safe navigation between related documents.
+
+## Edge Types
+
+### One-to-Many (Has Many)
+
+A parent entity has multiple child entities:
+
+```ts
+// A todo can have many assigned users
+defineEnt({
+  title: v.string(),
+  // ... other fields
+})
+  .edges("todoAssignedUsers", { ref: true })
+```
+
+The `{ ref: true }` indicates this is the "one" side that references many children.
+
+### Many-to-One (Belongs To)
+
+A child entity belongs to a parent:
+
+```ts
+// An assignment belongs to a todo
+defineEnt({
+  todoId: v.id("todos"),
+  userId: v.string(),
+})
+  .edge("todo")
+```
+
+### One-to-One
+
+A unique relationship between two entities:
+
+```ts
+defineEnt({
+  // ... fields
+})
+  .edge("profile", { unique: true })
+```
+
+## Defining Edges
+
+### Basic Edge Definition
+
+```ts
+const entSchema = defineEntSchema({
+  todos: defineEnt({
+    title: v.string(),
+    organizationId: v.string(),
+  })
+    // One todo -> Many assignments
+    .edges("todoAssignedUsers", { ref: true }),
+
+  todoAssignedUsers: defineEnt({
+    todoId: v.id("todos"),
+    userId: v.string(),
+    assignedAt: v.number(),
+  })
+    // Many assignments -> One todo
+    .edge("todo"),
+});
+```
+
+### Edge with Custom Field Name
+
+```ts
+defineEnt({
+  authorId: v.id("users"), // Custom field name
+})
+  .edge("author", { field: "authorId" }) // Specify the field
+```
+
+### Named Edges
+
+Give edges meaningful names for your domain:
+
+```ts
+defineEnt({
+  // ... fields
+})
+  .edges("comments", { ref: true })     // Post has many comments
+  .edges("likes", { ref: true })        // Post has many likes
+  .edge("author")                       // Post belongs to author
+```
+
+## Navigating Edges
+
+### Get Related Documents
+
+```ts
+const todo = await ctx.table("todos").get(todoId);
+
+// Get all assigned user records
+const assignments = await todo.edge("todoAssignedUsers");
+```
+
+### With Eager Loading
+
+Load related data efficiently:
+
+```ts
+const todos = await ctx.table("todos").collect();
+
+const todosWithAssignments = await Promise.all(
+  todos.map(async (todo) => ({
+    id: todo._id,
+    title: todo.title,
+    assignments: await todo.edge("todoAssignedUsers"),
+  }))
+);
+```
+
+### Traverse Multiple Levels
+
+```ts
+const assignment = await ctx.table("todoAssignedUsers").get(assignmentId);
+
+// Go from assignment -> todo
+const todo = await assignment.edge("todo");
+```
+
+## Creating Relationships
+
+### Insert with Reference
+
+```ts
+// Create a todo
+const todoId = await ctx.table("todos").insert({
+  title: "New task",
+  organizationId: ctx.identity.activeOrganizationId,
+});
+
+// Create an assignment linking to the todo
+await ctx.table("todoAssignedUsers").insert({
+  todoId: todoId,
+  userId: assigneeId,
+  assignedAt: Date.now(),
+});
+```
+
+### Assign Multiple Users
+
+```ts
+export const assignUsers = zMutation({
+  args: z.object({
+    todoId: z.string(),
+    userIds: z.array(z.string()),
+  }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.todoId);
+    if (!todo) throw new Error("Todo not found");
+
+    // Get existing assignments
+    const existing = await todo.edge("todoAssignedUsers");
+    const existingUserIds = new Set(existing.map((a) => a.userId));
+
+    // Add new assignments
+    const newUserIds = args.userIds.filter((id) => !existingUserIds.has(id));
+
+    await Promise.all(
+      newUserIds.map((userId) =>
+        ctx.table("todoAssignedUsers").insert({
+          todoId: todo._id,
+          userId,
+          assignedBy: ctx.identity.userId,
+          assignedAt: Date.now(),
+        })
+      )
+    );
+  },
+});
+```
+
+## Deleting Relationships
+
+### Remove Single Assignment
+
+```ts
+export const unassignUser = zMutation({
+  args: z.object({
+    todoId: z.string(),
+    userId: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    const assignment = await ctx
+      .table("todoAssignedUsers", "todoId_userId", (q) =>
+        q.eq("todoId", args.todoId).eq("userId", args.userId)
+      )
+      .unique();
+
+    if (assignment) {
+      await ctx.table("todoAssignedUsers").delete(assignment._id);
+    }
+  },
+});
+```
+
+### Cascade Delete
+
+When deleting a parent, also delete children:
+
+```ts
+export const deleteTodo = zMutation({
+  args: z.object({ id: z.string() }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.id);
+    if (!todo) throw new Error("Todo not found");
+
+    // Delete all assignments first
+    const assignments = await todo.edge("todoAssignedUsers");
+    await Promise.all(
+      assignments.map((a) => ctx.table("todoAssignedUsers").delete(a._id))
+    );
+
+    // Then delete the todo
+    await ctx.table("todos").delete(todo._id);
+  },
+});
+```
+
+## Querying Through Edges
+
+### Filter by Related Data
+
+```ts
+// Find todos assigned to a specific user
+export const listAssignedTo = zQuery({
+  args: z.object({ userId: z.string() }),
+  handler: async (ctx, args) => {
+    // Get assignments for the user
+    const assignments = await ctx
+      .table("todoAssignedUsers", "userId", (q) =>
+        q.eq("userId", args.userId)
+      )
+      .collect();
+
+    // Get the todos
+    const todos = await Promise.all(
+      assignments.map((a) => a.edge("todo"))
+    );
+
+    // Filter out nulls and return
+    return todos.filter(Boolean);
+  },
+});
+```
+
+### Count Related Documents
+
+```ts
+const todo = await ctx.table("todos").get(todoId);
+const assignments = await todo.edge("todoAssignedUsers");
+const assigneeCount = assignments.length;
+```
+
+## Best Practices
+
+### 1. Use Indexes for Edge Lookups
+
+```ts
+defineEnt({
+  todoId: v.id("todos"),
+  userId: v.string(),
+})
+  .index("todoId", ["todoId"])           // For todo.edge("assignments")
+  .index("userId", ["userId"])           // For "assigned to user" queries
+  .index("todoId_userId", ["todoId", "userId"]) // For unique lookups
+```
+
+### 2. Eager Load When Needed
+
+```ts
+// Good: Load related data in parallel
+const todosWithData = await Promise.all(
+  todos.map(async (todo) => ({
+    ...todo,
+    assignments: await todo.edge("todoAssignedUsers"),
+  }))
+);
+```
+
+### 3. Avoid N+1 Queries
+
+```ts
+// Avoid: Sequential queries
+for (const todo of todos) {
+  const assignments = await todo.edge("todoAssignedUsers"); // N queries
+}
+
+// Better: Parallel queries
+const allAssignments = await Promise.all(
+  todos.map((todo) => todo.edge("todoAssignedUsers"))
+);
+```
+
+Next, learn about [Many-to-Many Relationships](/docs/ents/many-to-many).

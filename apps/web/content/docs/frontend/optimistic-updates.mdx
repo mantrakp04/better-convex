@@ -1,0 +1,319 @@
+---
+title: Optimistic Updates
+description: Instant UI feedback before server confirmation
+---
+
+# Optimistic Updates
+
+Optimistic updates show changes immediately in the UI before the server confirms them. This makes your app feel faster and more responsive.
+
+## How It Works
+
+```
+1. User clicks "Complete"
+2. UI immediately shows todo as done (optimistic)
+3. Mutation sent to server
+4. Server confirms -> UI stays as is
+5. Server fails -> UI reverts to previous state
+```
+
+## With TanStack Query
+
+### Basic Optimistic Update
+
+```tsx
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useConvexMutation } from "@convex-dev/react-query";
+import { api } from "@/convex/_generated/api";
+
+function useTodoUpdate() {
+  const queryClient = useQueryClient();
+  const updateFn = useConvexMutation(api.todos.update);
+
+  return useMutation({
+    mutationFn: updateFn,
+    onMutate: async (newData) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["todos"] });
+
+      // Snapshot previous value
+      const previousTodos = queryClient.getQueryData(["todos"]);
+
+      // Optimistically update
+      queryClient.setQueryData(["todos"], (old: Todo[]) =>
+        old.map((todo) =>
+          todo._id === newData.id
+            ? { ...todo, ...newData }
+            : todo
+        )
+      );
+
+      // Return context with snapshot
+      return { previousTodos };
+    },
+    onError: (err, newData, context) => {
+      // Rollback on error
+      queryClient.setQueryData(["todos"], context?.previousTodos);
+    },
+    onSettled: () => {
+      // Always refetch after mutation
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
+    },
+  });
+}
+```
+
+## Convex Real-Time Alternative
+
+With Convex's real-time subscriptions, you often don't need traditional optimistic updates. The data updates automatically within ~50-200ms.
+
+### When to Use Each
+
+| Scenario | Approach |
+|----------|----------|
+| Fast networks, simple updates | Rely on Convex real-time |
+| Slow networks | Optimistic updates |
+| Drag-and-drop interactions | Optimistic updates |
+| Critical data accuracy | Wait for confirmation |
+
+## Simple Pending State
+
+For most cases, showing a pending state is sufficient:
+
+```tsx
+function TodoItem({ todo }) {
+  const { update } = useTodoMutations();
+
+  return (
+    <div className={update.isPending ? "opacity-50" : ""}>
+      <span>{todo.title}</span>
+      <button
+        onClick={() => update.mutate({ id: todo._id, status: "done" })}
+        disabled={update.isPending}
+      >
+        {update.isPending ? "Saving..." : "Complete"}
+      </button>
+    </div>
+  );
+}
+```
+
+## Local State for Instant Feedback
+
+### Toggle with Local State
+
+```tsx
+function TodoCheckbox({ todo }) {
+  const [localStatus, setLocalStatus] = useState(todo.status);
+  const { update } = useTodoMutations();
+
+  // Sync local state with server state
+  useEffect(() => {
+    setLocalStatus(todo.status);
+  }, [todo.status]);
+
+  const handleToggle = () => {
+    const newStatus = localStatus === "done" ? "todo" : "done";
+
+    // Update local state immediately
+    setLocalStatus(newStatus);
+
+    // Send to server
+    update.mutate(
+      { id: todo._id, status: newStatus },
+      {
+        onError: () => {
+          // Revert on error
+          setLocalStatus(todo.status);
+        },
+      }
+    );
+  };
+
+  return (
+    <input
+      type="checkbox"
+      checked={localStatus === "done"}
+      onChange={handleToggle}
+    />
+  );
+}
+```
+
+### Drag and Drop
+
+```tsx
+function KanbanBoard() {
+  const { todos } = useTodosList();
+  const { update } = useTodoMutations();
+  const [localTodos, setLocalTodos] = useState(todos);
+
+  // Sync with server data
+  useEffect(() => {
+    setLocalTodos(todos);
+  }, [todos]);
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+
+    const { draggableId, destination } = result;
+    const newStatus = destination.droppableId as Status;
+
+    // Optimistically update local state
+    setLocalTodos((prev) =>
+      prev.map((t) =>
+        t._id === draggableId ? { ...t, status: newStatus } : t
+      )
+    );
+
+    // Send to server
+    update.mutate(
+      { id: draggableId, status: newStatus },
+      {
+        onError: () => {
+          // Revert to server state on error
+          setLocalTodos(todos);
+        },
+      }
+    );
+  };
+
+  return (
+    <DragDropContext onDragEnd={handleDragEnd}>
+      {/* Render localTodos instead of todos */}
+    </DragDropContext>
+  );
+}
+```
+
+## Optimistic Create
+
+```tsx
+function TodoCreator() {
+  const [pendingTodos, setPendingTodos] = useState<PendingTodo[]>([]);
+  const { create } = useTodoMutations();
+
+  const handleCreate = (title: string) => {
+    const tempId = `pending-${Date.now()}`;
+
+    // Add to pending list
+    setPendingTodos((prev) => [
+      ...prev,
+      { tempId, title, status: "todo", isPending: true },
+    ]);
+
+    // Send to server
+    create.mutate(
+      { title, priority: "medium" },
+      {
+        onSuccess: () => {
+          // Remove from pending (server data will appear via subscription)
+          setPendingTodos((prev) =>
+            prev.filter((t) => t.tempId !== tempId)
+          );
+        },
+        onError: () => {
+          // Mark as failed
+          setPendingTodos((prev) =>
+            prev.map((t) =>
+              t.tempId === tempId ? { ...t, isFailed: true } : t
+            )
+          );
+        },
+      }
+    );
+  };
+
+  return (
+    <>
+      <TodoForm onSubmit={handleCreate} />
+      {pendingTodos.map((t) => (
+        <PendingTodoItem key={t.tempId} todo={t} />
+      ))}
+    </>
+  );
+}
+```
+
+## Optimistic Delete
+
+```tsx
+function TodoList() {
+  const { todos } = useTodosList();
+  const { remove } = useTodoMutations();
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  const handleDelete = (id: string) => {
+    // Mark as deleting
+    setDeletingIds((prev) => new Set(prev).add(id));
+
+    remove.mutate(
+      { id },
+      {
+        onSettled: () => {
+          // Remove from deleting set
+          setDeletingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        },
+      }
+    );
+  };
+
+  // Filter out deleting items for instant feedback
+  const visibleTodos = todos.filter((t) => !deletingIds.has(t._id));
+
+  return (
+    <ul>
+      {visibleTodos.map((todo) => (
+        <TodoItem
+          key={todo._id}
+          todo={todo}
+          onDelete={() => handleDelete(todo._id)}
+        />
+      ))}
+    </ul>
+  );
+}
+```
+
+## Best Practices
+
+### 1. Handle Errors Gracefully
+
+Always revert optimistic changes on error:
+
+```tsx
+onError: () => {
+  setLocalState(serverState);
+  toast.error("Failed to update");
+}
+```
+
+### 2. Show Pending State
+
+Visual feedback helps users understand something is happening:
+
+```tsx
+<div className={isPending ? "opacity-50 pointer-events-none" : ""}>
+```
+
+### 3. Disable Double-Submits
+
+```tsx
+<button disabled={mutation.isPending}>
+  {mutation.isPending ? "Saving..." : "Save"}
+</button>
+```
+
+### 4. Use for UX-Critical Interactions
+
+Focus optimistic updates on interactions where instant feedback matters most:
+- Toggles and checkboxes
+- Drag and drop
+- Like/favorite buttons
+- Real-time collaborative features
+
+For less time-sensitive operations, rely on Convex's fast real-time updates.

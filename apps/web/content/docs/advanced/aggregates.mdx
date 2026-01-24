@@ -1,0 +1,292 @@
+---
+title: Aggregates
+description: Real-time statistics with @convex-dev/aggregate
+---
+
+# Aggregates
+
+The `@convex-dev/aggregate` library provides efficient real-time statistics without expensive queries. Instead of counting records on every request, aggregates maintain running totals that update automatically.
+
+## Why Aggregates?
+
+### Without Aggregates (Expensive)
+
+```ts
+// This scans potentially thousands of records
+export const getStats = query({
+  handler: async (ctx) => {
+    const todos = await ctx.db.query("todos").collect();
+    return {
+      total: todos.length,
+      done: todos.filter((t) => t.status === "done").length,
+      highPriority: todos.filter((t) => t.priority === "high").length,
+    };
+  },
+});
+```
+
+### With Aggregates (Efficient)
+
+```ts
+// Returns instantly regardless of data size
+export const getStats = query({
+  handler: async (ctx) => {
+    return {
+      total: await todosByOrg.count(ctx, { namespace: orgId }),
+      done: await todosByOrgStatus.count(ctx, {
+        namespace: orgId,
+        bounds: { key: "done" }
+      }),
+      highPriority: await todosByOrgPriority.count(ctx, {
+        namespace: orgId,
+        bounds: { key: "high" }
+      }),
+    };
+  },
+});
+```
+
+## Setting Up Aggregates
+
+### 1. Configure the Plugin
+
+```ts
+// convex.config.ts
+import { defineApp } from "convex/server";
+import aggregate from "@convex-dev/aggregate/convex.config";
+
+const app = defineApp();
+app.use(aggregate, { name: "aggregate" });
+
+export default app;
+```
+
+### 2. Define Aggregates
+
+```ts
+// todos/aggregates.ts
+import { TableAggregate } from "@convex-dev/aggregate";
+import { components } from "../_generated/api";
+import { DataModel } from "../_generated/dataModel";
+
+// Count todos by organization
+export const todosByOrg = new TableAggregate<DataModel, "todos">(
+  components.aggregate,
+  {
+    namespace: (doc) => doc.organizationId,
+    sortKey: (doc) => doc._creationTime,
+  }
+);
+
+// Count by organization + status
+export const todosByOrgStatus = new TableAggregate<DataModel, "todos">(
+  components.aggregate,
+  {
+    namespace: (doc) => doc.organizationId,
+    sortKey: (doc) => doc.status,
+  }
+);
+
+// Count by organization + priority
+export const todosByOrgPriority = new TableAggregate<DataModel, "todos">(
+  components.aggregate,
+  {
+    namespace: (doc) => doc.organizationId,
+    sortKey: (doc) => doc.priority,
+  }
+);
+
+// Count by team
+export const todosByTeam = new TableAggregate<DataModel, "todos">(
+  components.aggregate,
+  {
+    namespace: (doc) => `${doc.organizationId}:${doc.teamId ?? "none"}`,
+    sortKey: (doc) => doc._creationTime,
+  }
+);
+
+// Count by creator
+export const todosByCreator = new TableAggregate<DataModel, "todos">(
+  components.aggregate,
+  {
+    namespace: (doc) => doc.userId,
+    sortKey: (doc) => doc._creationTime,
+  }
+);
+```
+
+### 3. Register Triggers
+
+Triggers automatically update aggregates when data changes:
+
+```ts
+// todos/aggregates.ts
+import { Triggers } from "convex-helpers/server/triggers";
+import { internal } from "../_generated/api";
+import { DataModel } from "../_generated/dataModel";
+
+export const triggers = new Triggers<DataModel>();
+
+// Register all aggregates as triggers on the todos table
+triggers.register("todos", todosByOrg.trigger());
+triggers.register("todos", todosByOrgStatus.trigger());
+triggers.register("todos", todosByOrgPriority.trigger());
+triggers.register("todos", todosByTeam.trigger());
+triggers.register("todos", todosByCreator.trigger());
+```
+
+### 4. Wrap Mutations with Triggers
+
+```ts
+// functions.ts
+import { triggers } from "./todos/aggregates";
+import { wrapDatabaseWriter } from "convex-helpers/server/triggers";
+
+export const zMutation = zCustomMutation(baseMutation, {
+  input: async (ctx) => {
+    // Wrap db to fire triggers
+    const wrappedDb = wrapDatabaseWriter(ctx, ctx.db, triggers);
+
+    return {
+      ctx: {
+        ...ctx,
+        db: wrappedDb,
+        table: entsTableFactory({ ...ctx, db: wrappedDb }, entDefinitions),
+        identity: parsed,
+      },
+    };
+  },
+});
+```
+
+## Querying Aggregates
+
+### Basic Count
+
+```ts
+const totalTodos = await todosByOrg.count(ctx, {
+  namespace: ctx.identity.activeOrganizationId,
+});
+```
+
+### Count with Key Filter
+
+```ts
+// Count todos with status "done"
+const doneTodos = await todosByOrgStatus.count(ctx, {
+  namespace: ctx.identity.activeOrganizationId,
+  bounds: { key: "done" },
+});
+```
+
+### Multiple Stats at Once
+
+```ts
+export const getOrgStats = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    const orgId = ctx.identity.activeOrganizationId;
+
+    const [total, todo, inProgress, done, low, medium, high] =
+      await Promise.all([
+        todosByOrg.count(ctx, { namespace: orgId }),
+        todosByOrgStatus.count(ctx, { namespace: orgId, bounds: { key: "todo" } }),
+        todosByOrgStatus.count(ctx, { namespace: orgId, bounds: { key: "in_progress" } }),
+        todosByOrgStatus.count(ctx, { namespace: orgId, bounds: { key: "done" } }),
+        todosByOrgPriority.count(ctx, { namespace: orgId, bounds: { key: "low" } }),
+        todosByOrgPriority.count(ctx, { namespace: orgId, bounds: { key: "medium" } }),
+        todosByOrgPriority.count(ctx, { namespace: orgId, bounds: { key: "high" } }),
+      ]);
+
+    return {
+      total,
+      byStatus: { todo, inProgress, done },
+      byPriority: { low, medium, high },
+    };
+  },
+});
+```
+
+### Team Stats
+
+```ts
+export const getTeamStats = zQuery({
+  args: z.object({ teamId: z.string() }),
+  handler: async (ctx, args) => {
+    const namespace = `${ctx.identity.activeOrganizationId}:${args.teamId}`;
+
+    return {
+      total: await todosByTeam.count(ctx, { namespace }),
+    };
+  },
+});
+```
+
+## Composite Namespaces
+
+For multi-level aggregation, combine keys:
+
+```ts
+// Organization + Team + Status
+export const todosByOrgTeamStatus = new TableAggregate<DataModel, "todos">(
+  components.aggregate,
+  {
+    namespace: (doc) =>
+      `${doc.organizationId}:${doc.teamId ?? "none"}`,
+    sortKey: (doc) => doc.status,
+  }
+);
+
+// Query: Done todos in a specific team
+const doneInTeam = await todosByOrgTeamStatus.count(ctx, {
+  namespace: `${orgId}:${teamId}`,
+  bounds: { key: "done" },
+});
+```
+
+## Real-Time Updates
+
+Aggregates are reactive - when data changes, queries automatically update:
+
+```tsx
+function Dashboard() {
+  const stats = useQuery(api.todos.stats.getOrgStats);
+
+  // Stats update in real-time as todos are created/updated/deleted
+  return (
+    <div>
+      <p>Total: {stats?.total}</p>
+      <p>Done: {stats?.byStatus.done}</p>
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+### 1. Choose Namespaces Carefully
+
+```ts
+// Good: Specific namespace for the query pattern
+namespace: (doc) => doc.organizationId
+
+// Bad: Too broad, can't filter by org
+namespace: () => "global"
+```
+
+### 2. Register All Needed Aggregates
+
+Create separate aggregates for each dimension you need to query.
+
+### 3. Use Promise.all for Multiple Counts
+
+```ts
+// Good: Parallel queries
+const [a, b, c] = await Promise.all([
+  agg1.count(ctx, opts),
+  agg2.count(ctx, opts),
+  agg3.count(ctx, opts),
+]);
+```
+
+Next, learn about [Pagination](/docs/advanced/pagination).

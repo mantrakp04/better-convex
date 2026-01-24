@@ -1,0 +1,113 @@
+---
+title: Introduction
+description: Learn what Convex is and why it's the ideal backend for modern applications
+---
+
+# Introduction to Convex
+
+Convex is a reactive backend-as-a-service that provides a database, serverless functions, and real-time subscriptions out of the box. It eliminates the complexity of traditional backend development while giving you full type safety from database to frontend.
+
+## Why Convex?
+
+### Real-Time by Default
+
+Every query in Convex is automatically reactive. When data changes, your UI updates instantly without any additional code:
+
+```tsx
+// This automatically re-renders when todos change
+const todos = useQuery(api.todos.list);
+```
+
+### Full Type Safety
+
+Convex provides end-to-end type inference. Your schema types flow through queries and mutations all the way to your React components:
+
+```ts
+// Backend: Define your schema
+const todos = defineTable({
+  title: v.string(),
+  status: v.union(v.literal("todo"), v.literal("done")),
+});
+
+// Frontend: Types are automatically inferred
+const todos = useQuery(api.todos.list);
+// todos is typed as Array<{ title: string; status: "todo" | "done"; ... }>
+```
+
+### ACID Transactions
+
+All mutations in Convex are automatically transactional. If any part of a mutation fails, the entire operation is rolled back:
+
+```ts
+export const transferTodo = mutation({
+  handler: async (ctx, args) => {
+    // Both operations succeed or both fail
+    await ctx.db.patch(args.todoId, { teamId: args.newTeamId });
+    await ctx.db.insert("activityLog", { action: "transferred", todoId: args.todoId });
+  },
+});
+```
+
+### No Infrastructure Management
+
+Convex handles:
+- Database scaling and replication
+- Function deployment and execution
+- Real-time WebSocket connections
+- Authentication integration
+
+## Core Concepts
+
+### Queries
+
+Queries read data from the database. They are cached and reactive:
+
+```ts
+export const list = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("todos").collect();
+  },
+});
+```
+
+### Mutations
+
+Mutations modify data. They run in transactions and trigger query re-evaluation:
+
+```ts
+export const create = mutation({
+  args: { title: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("todos", { title: args.title, status: "todo" });
+  },
+});
+```
+
+### Actions
+
+Actions can call external APIs and perform side effects. Unlike mutations, they don't have transactional guarantees:
+
+```ts
+export const sendNotification = action({
+  args: { todoId: v.id("todos") },
+  handler: async (ctx, args) => {
+    const todo = await ctx.runQuery(api.todos.get, { id: args.todoId });
+    await fetch("https://api.notifications.com/send", {
+      method: "POST",
+      body: JSON.stringify({ message: `Todo: ${todo.title}` }),
+    });
+  },
+});
+```
+
+## What This Template Adds
+
+This template builds on Convex with:
+
+1. **Convex Ents** - Type-safe entity relationships
+2. **Zod Validation** - Runtime argument validation with `zQuery`/`zMutation`
+3. **Better Auth** - Full authentication with organizations and teams
+4. **Aggregates** - Real-time statistics without expensive queries
+5. **Multi-Tenancy** - Organization-scoped data isolation
+
+Continue to [Setup](/docs/getting-started/setup) to get the template running.

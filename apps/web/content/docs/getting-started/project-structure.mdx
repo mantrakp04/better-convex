@@ -1,0 +1,150 @@
+---
+title: Project Structure
+description: Understand how the template is organized
+---
+
+# Project Structure
+
+This template uses a monorepo structure powered by Turborepo, with clear separation between frontend and backend code.
+
+## Overview
+
+```
+better-convex/
+├── apps/
+│   └── web/                    # Frontend application
+├── packages/
+│   └── backend/
+│       └── convex/             # Convex backend
+├── package.json                # Root workspace config
+├── turbo.json                  # Turborepo configuration
+└── bun.lockb                   # Bun lockfile
+```
+
+## Frontend (`apps/web`)
+
+The frontend is built with TanStack Start and React:
+
+```
+apps/web/
+├── src/
+│   ├── routes/                 # File-based routing
+│   │   ├── __root.tsx          # Root layout
+│   │   ├── index.tsx           # Home page
+│   │   ├── dashboard/          # Dashboard routes
+│   │   └── docs/               # Documentation routes
+│   ├── components/             # React components
+│   │   ├── ui/                 # shadcn/ui components
+│   │   └── ...                 # Feature components
+│   ├── lib/                    # Utilities and configs
+│   │   ├── auth.ts             # Auth client setup
+│   │   ├── convex.ts           # Convex client setup
+│   │   └── source.ts           # Fumadocs config
+│   └── hooks/                  # Custom React hooks
+├── content/
+│   └── docs/                   # MDX documentation files
+└── app.config.ts               # TanStack Start config
+```
+
+## Backend (`packages/backend/convex`)
+
+The Convex backend contains all server-side logic:
+
+```
+packages/backend/convex/
+├── _generated/                 # Auto-generated types (don't edit)
+│   ├── api.d.ts                # API type definitions
+│   ├── dataModel.d.ts          # Database types
+│   └── server.d.ts             # Server utilities
+├── schema.ts                   # Database schema with Ents
+├── functions.ts                # zQuery/zMutation factories
+├── convex.config.ts            # Convex app configuration
+├── auth.ts                     # Better Auth setup
+├── auth.config.ts              # JWT provider config
+├── http.ts                     # HTTP routes
+├── tables/                     # Entity definitions
+│   ├── todos.ts                # Todo entity
+│   └── todoAssignedUsers.ts    # Junction table
+├── todos/                      # Todo feature module
+│   ├── index.ts                # Exported queries/mutations
+│   ├── functions.ts            # Implementation logic
+│   ├── types.ts                # Zod schemas
+│   ├── stats.ts                # Statistics queries
+│   ├── statsTypes.ts           # Statistics schemas
+│   └── aggregates.ts           # Aggregate definitions
+├── betterAuth/                 # Better Auth integration
+│   ├── schema.ts               # Auth database schema
+│   ├── adapter.ts              # Convex adapter
+│   ├── auth.ts                 # Auth client
+│   └── convex.config.ts        # Auth plugin config
+└── shared/
+    └── auth_shared.ts          # Access control utilities
+```
+
+## Key Files Explained
+
+### `schema.ts`
+
+Defines your database schema using Convex Ents:
+
+```ts
+import { entDefinitions } from "./tables/todos";
+
+const schema = defineEnt({
+  ...entDefinitions,
+  // Additional tables defined by plugins
+});
+
+export default schema;
+```
+
+### `functions.ts`
+
+Creates typed query/mutation factories with automatic auth injection:
+
+```ts
+export const zQuery = zCustomQuery(baseQuery, {
+  input: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    return {
+      ctx: {
+        ...ctx,
+        table: entsTableFactory(ctx, entDefinitions),
+        identity: parsedIdentity
+      },
+    };
+  },
+});
+```
+
+### `convex.config.ts`
+
+Composes your app with Convex plugins:
+
+```ts
+import { defineApp } from "convex/server";
+import betterAuth from "./betterAuth/convex.config";
+import aggregate from "@convex-dev/aggregate/convex.config";
+
+const app = defineApp();
+app.use(betterAuth, { name: "betterAuth" });
+app.use(aggregate, { name: "aggregate" });
+
+export default app;
+```
+
+## Module Pattern
+
+Each feature follows a consistent pattern:
+
+```
+feature/
+├── index.ts        # Exports (public API)
+├── functions.ts    # Implementation
+├── types.ts        # Zod schemas for args
+└── aggregates.ts   # Optional: aggregate definitions
+```
+
+This separation keeps code organized and makes it easy to find related functionality.
+
+Next, dive into [Convex Fundamentals](/docs/fundamentals/queries-mutations).

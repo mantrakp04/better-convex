@@ -1,0 +1,264 @@
+---
+title: Actions
+description: Perform side effects and call external APIs with Convex actions
+---
+
+# Actions
+
+Actions are Convex functions that can perform side effects like calling external APIs, sending emails, or processing files. Unlike mutations, they don't have transactional guarantees.
+
+## When to Use Actions
+
+| Use Case | Function Type |
+|----------|--------------|
+| Read data | Query |
+| Write data | Mutation |
+| Call external API | Action |
+| Send notifications | Action |
+| File processing | Action |
+| Complex multi-step operations | Action |
+
+## Basic Action
+
+```ts
+import { zAction } from "../functions";
+import { z } from "zod";
+
+export const sendNotification = zAction({
+  args: z.object({
+    todoId: z.string(),
+    message: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    // Actions can call queries to read data
+    const todo = await ctx.runQuery(api.todos.getById, { id: args.todoId });
+
+    // Call external API
+    const response = await fetch("https://api.notifications.com/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: todo.title,
+        message: args.message,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to send notification");
+    }
+
+    // Actions can call mutations to write data
+    await ctx.runMutation(api.todos.markNotified, { id: args.todoId });
+
+    return { success: true };
+  },
+});
+```
+
+## Action Context
+
+Actions have a different context than queries and mutations:
+
+```ts
+handler: async (ctx, args) => {
+  // Run a query (read data)
+  const data = await ctx.runQuery(api.todos.list, {});
+
+  // Run a mutation (write data)
+  await ctx.runMutation(api.todos.create, { title: "New todo" });
+
+  // Run another action
+  await ctx.runAction(api.notifications.send, { message: "Hello" });
+
+  // Schedule a function to run later
+  await ctx.scheduler.runAfter(60000, api.cleanup.run, {});
+
+  // Access auth (same as queries/mutations)
+  const identity = await ctx.auth.getUserIdentity();
+}
+```
+
+## Calling External APIs
+
+```ts
+export const fetchWeather = zAction({
+  args: z.object({
+    city: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    const response = await fetch(
+      `https://api.weather.com/v1/current?city=${encodeURIComponent(args.city)}`,
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.WEATHER_API_KEY}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Weather API error: ${response.status}`);
+    }
+
+    return await response.json();
+  },
+});
+```
+
+## File Processing
+
+```ts
+export const processImage = zAction({
+  args: z.object({
+    storageId: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    // Get file URL from Convex storage
+    const url = await ctx.storage.getUrl(args.storageId);
+    if (!url) throw new Error("File not found");
+
+    // Process with external service
+    const response = await fetch("https://api.imageprocessing.com/resize", {
+      method: "POST",
+      body: JSON.stringify({ imageUrl: url, width: 800, height: 600 }),
+    });
+
+    const processed = await response.json();
+
+    // Store result
+    await ctx.runMutation(api.images.saveProcessed, {
+      originalId: args.storageId,
+      processedUrl: processed.url,
+    });
+
+    return { success: true };
+  },
+});
+```
+
+## Error Handling in Actions
+
+Actions should handle errors gracefully since they can't be rolled back:
+
+```ts
+export const syncWithExternalService = zAction({
+  args: z.object({ recordId: z.string() }),
+  handler: async (ctx, args) => {
+    const record = await ctx.runQuery(api.records.get, { id: args.recordId });
+
+    try {
+      // External API call
+      const result = await fetch("https://external.api/sync", {
+        method: "POST",
+        body: JSON.stringify(record),
+      });
+
+      if (!result.ok) {
+        // Log the failure
+        await ctx.runMutation(api.syncLogs.create, {
+          recordId: args.recordId,
+          status: "failed",
+          error: `API returned ${result.status}`,
+        });
+        throw new Error("Sync failed");
+      }
+
+      // Mark as synced
+      await ctx.runMutation(api.records.markSynced, { id: args.recordId });
+
+    } catch (error) {
+      // Ensure we log failures
+      await ctx.runMutation(api.syncLogs.create, {
+        recordId: args.recordId,
+        status: "error",
+        error: error.message,
+      });
+      throw error;
+    }
+  },
+});
+```
+
+## Scheduling Actions
+
+Run actions at a specific time or after a delay:
+
+```ts
+// In a mutation
+export const createReminder = zMutation({
+  args: z.object({
+    todoId: z.string(),
+    remindAt: z.number(), // Unix timestamp
+  }),
+  handler: async (ctx, args) => {
+    // Schedule notification for later
+    await ctx.scheduler.runAt(
+      args.remindAt,
+      api.notifications.sendReminder,
+      { todoId: args.todoId }
+    );
+  },
+});
+
+// Run after delay (in milliseconds)
+await ctx.scheduler.runAfter(
+  60 * 60 * 1000, // 1 hour
+  api.cleanup.run,
+  {}
+);
+```
+
+## Best Practices
+
+### 1. Keep Actions Focused
+
+```ts
+// Good: Single responsibility
+export const sendWelcomeEmail = zAction({ ... });
+export const createStripeCustomer = zAction({ ... });
+
+// Avoid: Too many responsibilities
+export const setupNewUser = zAction({
+  handler: async (ctx, args) => {
+    // Don't do everything in one action
+    await sendEmail(...);
+    await createStripeCustomer(...);
+    await syncToCRM(...);
+  },
+});
+```
+
+### 2. Handle Partial Failures
+
+```ts
+export const multiStepAction = zAction({
+  handler: async (ctx, args) => {
+    // Step 1: Idempotent or reversible
+    const step1Result = await step1();
+
+    try {
+      // Step 2: May fail
+      await step2();
+    } catch (error) {
+      // Compensate for step 1 if needed
+      await rollbackStep1(step1Result);
+      throw error;
+    }
+  },
+});
+```
+
+### 3. Use Mutations for Data Changes
+
+```ts
+// Good: Action orchestrates, mutation writes
+export const importData = zAction({
+  handler: async (ctx, args) => {
+    const data = await fetchExternalData(args.sourceUrl);
+
+    // Use a mutation for the write
+    await ctx.runMutation(api.data.bulkInsert, { records: data });
+  },
+});
+```
+
+Next, learn about [Convex Ents](/docs/ents/overview).

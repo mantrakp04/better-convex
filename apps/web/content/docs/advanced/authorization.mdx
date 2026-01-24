@@ -1,0 +1,323 @@
+---
+title: Authorization Patterns
+description: Secure your data with proper authorization checks
+---
+
+# Authorization Patterns
+
+Authorization ensures users can only access and modify data they're allowed to. This template uses multiple layers of authorization.
+
+## Authorization Layers
+
+```
+1. Authentication (Better Auth)
+   └── Is the user logged in?
+
+2. Organization Membership
+   └── Does the user belong to this org?
+
+3. Role-Based Access
+   └── Does the user's role permit this action?
+
+4. Resource Ownership
+   └── Does the user own this specific resource?
+```
+
+## Automatic Organization Scoping
+
+The template automatically injects org context into every query:
+
+```ts
+// In functions.ts
+export const zQuery = zCustomQuery(baseQuery, {
+  input: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+
+    const parsed = parseIdentity(identity);
+    return {
+      ctx: {
+        ...ctx,
+        identity: parsed, // Includes activeOrganizationId
+      },
+    };
+  },
+});
+```
+
+## Query-Level Authorization
+
+### Organization-Scoped Queries
+
+Always filter by organization:
+
+```ts
+export const list = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Users only see their organization's data
+    return await ctx
+      .table("todos", "organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      )
+      .collect();
+  },
+});
+```
+
+### Validate Before Returning
+
+```ts
+export const getById = zQuery({
+  args: z.object({ id: z.string() }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.id);
+
+    // Don't reveal existence of other orgs' data
+    if (!todo || todo.organizationId !== ctx.identity.activeOrganizationId) {
+      return null; // Or throw "Not found"
+    }
+
+    return todo;
+  },
+});
+```
+
+## Mutation-Level Authorization
+
+### Ownership Check
+
+```ts
+export const update = zMutation({
+  args: z.object({
+    id: z.string(),
+    title: z.string(),
+  }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.id);
+
+    // Check existence
+    if (!todo) {
+      throw new Error("Todo not found");
+    }
+
+    // Check org membership
+    if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+      throw new Error("Not found"); // Don't reveal it exists
+    }
+
+    // Optionally check ownership for non-admins
+    const isAdmin = ["owner", "admin"].includes(ctx.identity.organizationRole);
+    if (!isAdmin && todo.userId !== ctx.identity.userId) {
+      throw new Error("You can only edit your own todos");
+    }
+
+    return await ctx.table("todos").patch(args.id, { title: args.title });
+  },
+});
+```
+
+### Role-Based Mutations
+
+```ts
+export const deleteAll = zMutation({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Only owners can delete all
+    if (ctx.identity.organizationRole !== "owner") {
+      throw new Error("Only organization owners can delete all todos");
+    }
+
+    const todos = await ctx
+      .table("todos", "organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      )
+      .collect();
+
+    await Promise.all(
+      todos.map((todo) => ctx.table("todos").delete(todo._id))
+    );
+  },
+});
+```
+
+## Authorization Helper Functions
+
+Create reusable authorization helpers:
+
+```ts
+// shared/auth_shared.ts
+
+export function assertOrgMember(
+  doc: { organizationId: string },
+  identity: Identity
+): void {
+  if (doc.organizationId !== identity.activeOrganizationId) {
+    throw new Error("Resource not found");
+  }
+}
+
+export function assertOwnerOrAdmin(identity: Identity): void {
+  if (!["owner", "admin"].includes(identity.organizationRole)) {
+    throw new Error("Admin access required");
+  }
+}
+
+export function assertResourceOwner(
+  doc: { userId: string },
+  identity: Identity
+): void {
+  if (doc.userId !== identity.userId) {
+    throw new Error("You don't have permission to modify this resource");
+  }
+}
+
+export function canEditResource(
+  doc: { userId: string; organizationId: string },
+  identity: Identity
+): boolean {
+  // Must be in same org
+  if (doc.organizationId !== identity.activeOrganizationId) {
+    return false;
+  }
+
+  // Admins can edit anything
+  if (["owner", "admin"].includes(identity.organizationRole)) {
+    return true;
+  }
+
+  // Others can only edit their own
+  return doc.userId === identity.userId;
+}
+```
+
+### Usage
+
+```ts
+export const update = zMutation({
+  args: UpdateArgs,
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").getX(args.id);
+
+    assertOrgMember(todo, ctx.identity);
+
+    if (!canEditResource(todo, ctx.identity)) {
+      throw new Error("Permission denied");
+    }
+
+    return await ctx.table("todos").patch(args.id, args.updates);
+  },
+});
+```
+
+## Team-Level Authorization
+
+```ts
+export function assertTeamMember(
+  doc: { teamId?: string },
+  identity: Identity
+): void {
+  // If doc has a team and user has an active team, they must match
+  if (doc.teamId && identity.activeTeamId && doc.teamId !== identity.activeTeamId) {
+    throw new Error("Resource not found");
+  }
+}
+```
+
+## Authorization in Edges
+
+When loading related data, verify access:
+
+```ts
+export const getTodoWithAssignees = zQuery({
+  args: z.object({ id: z.string() }),
+  handler: async (ctx, args) => {
+    const todo = await ctx.table("todos").get(args.id);
+
+    // Authorize the parent
+    if (!todo || todo.organizationId !== ctx.identity.activeOrganizationId) {
+      return null;
+    }
+
+    // Child data inherits authorization from parent
+    const assignees = await todo.edge("todoAssignedUsers");
+
+    return {
+      ...todo,
+      assignees,
+    };
+  },
+});
+```
+
+## Hiding Unauthorized Actions in UI
+
+```tsx
+function TodoActions({ todo }: { todo: Todo }) {
+  const { data: session } = useSession();
+  const identity = session?.session;
+
+  const isOwner = todo.userId === session?.user.id;
+  const isAdmin = ["owner", "admin"].includes(identity?.organizationRole ?? "");
+  const canEdit = isOwner || isAdmin;
+  const canDelete = isOwner || isAdmin;
+
+  return (
+    <div>
+      {canEdit && <Button onClick={() => editTodo(todo.id)}>Edit</Button>}
+      {canDelete && (
+        <Button variant="destructive" onClick={() => deleteTodo(todo.id)}>
+          Delete
+        </Button>
+      )}
+    </div>
+  );
+}
+```
+
+## Security Best Practices
+
+### 1. Never Trust Client Data
+
+```ts
+// Bad: Using client-provided orgId
+await ctx.table("todos").insert({
+  organizationId: args.organizationId, // Client can fake this!
+});
+
+// Good: Use server-side identity
+await ctx.table("todos").insert({
+  organizationId: ctx.identity.activeOrganizationId,
+});
+```
+
+### 2. Check Before Every Operation
+
+```ts
+// Always verify access, even for reads
+const todo = await ctx.table("todos").get(args.id);
+assertOrgMember(todo, ctx.identity);
+```
+
+### 3. Return Generic Errors
+
+```ts
+// Bad: Reveals information
+throw new Error("Todo belongs to org_abc123");
+
+// Good: Generic error
+throw new Error("Resource not found");
+```
+
+### 4. Log Suspicious Activity
+
+```ts
+if (todo.organizationId !== ctx.identity.activeOrganizationId) {
+  console.warn(`Unauthorized access attempt: user=${ctx.identity.userId}`);
+  throw new Error("Not found");
+}
+```
+
+Next, learn about [Frontend Integration](/docs/frontend/overview).

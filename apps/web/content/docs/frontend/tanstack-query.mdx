@@ -1,0 +1,304 @@
+---
+title: TanStack Query Integration
+description: Using Convex with TanStack Query for advanced data fetching
+---
+
+# TanStack Query Integration
+
+This template uses `@convex-dev/react-query` to combine Convex's real-time capabilities with TanStack Query's powerful features like caching, pagination, and mutations.
+
+## Setup
+
+### Query Client Configuration
+
+```tsx
+// lib/convex.ts
+import { ConvexReactClient } from "convex/react";
+import { ConvexQueryClient } from "@convex-dev/react-query";
+import { QueryClient } from "@tanstack/react-query";
+
+export const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
+export const convexQueryClient = new ConvexQueryClient(convex);
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      queryKeyHashFn: convexQueryClient.hashFn(),
+      queryFn: convexQueryClient.queryFn(),
+    },
+  },
+});
+
+convexQueryClient.connect(queryClient);
+```
+
+## Queries
+
+### Basic Query
+
+```tsx
+import { useConvexQuery } from "@convex-dev/react-query";
+import { api } from "@/convex/_generated/api";
+
+function Stats() {
+  const { data: stats, isLoading } = useConvexQuery(
+    api.todos.stats.getOrgStats,
+    {}
+  );
+
+  if (isLoading) return <Loading />;
+
+  return <div>Total: {stats?.total}</div>;
+}
+```
+
+### Query with Variables
+
+```tsx
+function TodosByStatus({ status }: { status: string }) {
+  const { data: todos } = useConvexQuery(
+    api.todos.list,
+    { filters: { status } }
+  );
+
+  return <TodoList todos={todos ?? []} />;
+}
+```
+
+### Conditional Queries
+
+```tsx
+function UserProfile({ userId }: { userId: string | null }) {
+  const { data: user } = useConvexQuery(
+    api.users.getById,
+    userId ? { id: userId } : "skip"
+  );
+
+  if (!userId) return null;
+  return <div>{user?.name}</div>;
+}
+```
+
+## Paginated Queries
+
+### Basic Pagination
+
+```tsx
+import { useConvexPaginatedQuery } from "@convex-dev/react-query";
+import { api } from "@/convex/_generated/api";
+
+function TodoList() {
+  const {
+    results,
+    status,
+    loadMore,
+    isLoading,
+  } = useConvexPaginatedQuery(
+    api.todos.list,
+    { filters: {} },
+    { initialNumItems: 20 }
+  );
+
+  if (isLoading) return <Loading />;
+
+  return (
+    <div>
+      {results.map((todo) => (
+        <TodoItem key={todo._id} todo={todo} />
+      ))}
+
+      {status === "CanLoadMore" && (
+        <button onClick={() => loadMore(20)}>
+          Load More
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+### Pagination Status
+
+| Status | Description |
+|--------|-------------|
+| `"LoadingFirstPage"` | Initial load |
+| `"LoadingMore"` | Loading next page |
+| `"CanLoadMore"` | More pages available |
+| `"Exhausted"` | No more pages |
+
+## Mutations
+
+### Basic Mutation
+
+```tsx
+import { useConvexMutation } from "@convex-dev/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "@/convex/_generated/api";
+
+function CreateTodoButton() {
+  const createTodo = useConvexMutation(api.todos.create);
+
+  const mutation = useMutation({
+    mutationFn: createTodo,
+  });
+
+  return (
+    <button
+      onClick={() => mutation.mutate({ title: "New Todo", priority: "medium" })}
+      disabled={mutation.isPending}
+    >
+      {mutation.isPending ? "Creating..." : "Create Todo"}
+    </button>
+  );
+}
+```
+
+### Mutation with Callbacks
+
+```tsx
+import { toast } from "sonner";
+
+function CreateTodo() {
+  const createTodo = useConvexMutation(api.todos.create);
+
+  const mutation = useMutation({
+    mutationFn: createTodo,
+    onSuccess: () => {
+      toast.success("Todo created!");
+    },
+    onError: (error) => {
+      toast.error(`Failed: ${error.message}`);
+    },
+  });
+
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      const title = e.currentTarget.title.value;
+      mutation.mutate({ title, priority: "medium" });
+    }}>
+      <input name="title" />
+      <button type="submit">Create</button>
+    </form>
+  );
+}
+```
+
+## Custom Hooks
+
+### Query Hook
+
+```tsx
+// hooks/useTodosList.ts
+import { useConvexPaginatedQuery } from "@convex-dev/react-query";
+import { api } from "@/convex/_generated/api";
+
+interface TodoFilters {
+  status?: "todo" | "in_progress" | "done";
+  priority?: "low" | "medium" | "high";
+}
+
+export function useTodosList(filters: TodoFilters) {
+  return useConvexPaginatedQuery(
+    api.todos.list,
+    { filters },
+    { initialNumItems: 20 }
+  );
+}
+```
+
+### Mutation Hook
+
+```tsx
+// hooks/useTodos.ts
+import { useConvexMutation } from "@convex-dev/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "@/convex/_generated/api";
+import { toast } from "sonner";
+
+export function useTodoMutations() {
+  const createFn = useConvexMutation(api.todos.create);
+  const updateFn = useConvexMutation(api.todos.update);
+  const deleteFn = useConvexMutation(api.todos.remove);
+
+  const create = useMutation({
+    mutationFn: createFn,
+    onSuccess: () => toast.success("Todo created"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  const update = useMutation({
+    mutationFn: updateFn,
+    onSuccess: () => toast.success("Todo updated"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: deleteFn,
+    onSuccess: () => toast.success("Todo deleted"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  return { create, update, remove };
+}
+```
+
+### Usage
+
+```tsx
+function TodoManager() {
+  const { results, loadMore, status } = useTodosList({ status: "todo" });
+  const { create, update, remove } = useTodoMutations();
+
+  return (
+    <div>
+      <button onClick={() => create.mutate({ title: "New", priority: "medium" })}>
+        Add Todo
+      </button>
+
+      {results.map((todo) => (
+        <div key={todo._id}>
+          {todo.title}
+          <button onClick={() => update.mutate({ id: todo._id, status: "done" })}>
+            Complete
+          </button>
+          <button onClick={() => remove.mutate({ id: todo._id })}>
+            Delete
+          </button>
+        </div>
+      ))}
+
+      {status === "CanLoadMore" && (
+        <button onClick={() => loadMore(20)}>Load More</button>
+      )}
+    </div>
+  );
+}
+```
+
+## Query Keys
+
+TanStack Query uses keys for caching. With Convex, keys are automatically generated:
+
+```tsx
+// These have different cache entries
+useConvexQuery(api.todos.list, { filters: {} });
+useConvexQuery(api.todos.list, { filters: { status: "done" } });
+```
+
+## Prefetching
+
+```tsx
+import { convexQueryClient } from "@/lib/convex";
+import { api } from "@/convex/_generated/api";
+
+// Prefetch before navigation
+async function prefetchTodos() {
+  await convexQueryClient.prefetchQuery(
+    api.todos.list,
+    { filters: {} }
+  );
+}
+```
+
+Next, learn about [Custom Hooks](/docs/frontend/hooks).

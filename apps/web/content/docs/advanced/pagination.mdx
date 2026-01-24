@@ -1,0 +1,285 @@
+---
+title: Pagination
+description: Cursor-based pagination for efficient data loading
+---
+
+# Pagination
+
+Convex uses cursor-based pagination for efficient loading of large datasets. This approach works well with real-time updates and provides consistent results even when data changes.
+
+## Why Cursor-Based?
+
+| Offset Pagination | Cursor Pagination |
+|------------------|-------------------|
+| `LIMIT 20 OFFSET 40` | `WHERE _id > cursor LIMIT 20` |
+| Skips records (slow for large offsets) | Seeks directly to position (fast) |
+| Inconsistent with data changes | Stable with data changes |
+| Can miss or duplicate items | Consistent results |
+
+## Basic Pagination
+
+### Backend
+
+```ts
+import { zPaginationOpts } from "convex-helpers/server/pagination";
+
+export const list = zQuery({
+  args: z.object({
+    paginationOpts: zPaginationOpts,
+  }),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("todos")
+      .withIndex("organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+  },
+});
+```
+
+### Frontend
+
+```tsx
+import { usePaginatedQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function TodoList() {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.todos.list,
+    {},
+    { initialNumItems: 20 }
+  );
+
+  return (
+    <div>
+      {results.map((todo) => (
+        <TodoItem key={todo._id} todo={todo} />
+      ))}
+
+      {status === "CanLoadMore" && (
+        <button onClick={() => loadMore(20)}>Load More</button>
+      )}
+
+      {status === "LoadingMore" && <p>Loading...</p>}
+    </div>
+  );
+}
+```
+
+## Pagination with Filters
+
+```ts
+export const list = zQuery({
+  args: z.object({
+    filters: z.object({
+      status: z.enum(["todo", "in_progress", "done"]).optional(),
+      priority: z.enum(["low", "medium", "high"]).optional(),
+    }),
+    paginationOpts: zPaginationOpts,
+  }),
+  handler: async (ctx, args) => {
+    let query = ctx.db
+      .query("todos")
+      .withIndex("organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      );
+
+    // Apply filters
+    if (args.filters.status) {
+      query = query.filter((q) =>
+        q.eq(q.field("status"), args.filters.status)
+      );
+    }
+    if (args.filters.priority) {
+      query = query.filter((q) =>
+        q.eq(q.field("priority"), args.filters.priority)
+      );
+    }
+
+    return await query.order("desc").paginate(args.paginationOpts);
+  },
+});
+```
+
+## Pagination Response
+
+The `paginate()` method returns:
+
+```ts
+{
+  page: Doc<"todos">[],      // Current page of results
+  isDone: boolean,           // True if no more pages
+  continueCursor: string,    // Cursor for next page
+}
+```
+
+## Custom Pagination Hook
+
+```ts
+// hooks/useTodosList.ts
+import { useConvexPaginatedQuery } from "@convex-dev/react-query";
+import { api } from "@/convex/_generated/api";
+
+export function useTodosList(filters: TodoFilters) {
+  return useConvexPaginatedQuery(
+    api.todos.list,
+    { filters },
+    { initialNumItems: 20 }
+  );
+}
+```
+
+## Infinite Scroll
+
+```tsx
+import { useEffect, useRef } from "react";
+import { useInView } from "react-intersection-observer";
+
+function InfiniteList() {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.todos.list,
+    {},
+    { initialNumItems: 20 }
+  );
+
+  const { ref, inView } = useInView();
+
+  useEffect(() => {
+    if (inView && status === "CanLoadMore") {
+      loadMore(20);
+    }
+  }, [inView, status, loadMore]);
+
+  return (
+    <div>
+      {results.map((todo) => (
+        <TodoItem key={todo._id} todo={todo} />
+      ))}
+
+      {/* Sentinel element */}
+      <div ref={ref}>
+        {status === "LoadingMore" && <Spinner />}
+      </div>
+    </div>
+  );
+}
+```
+
+## Handling Cursor Errors
+
+When data changes significantly, cursors can become invalid:
+
+```ts
+export const list = zQuery({
+  args: z.object({
+    paginationOpts: zPaginationOpts,
+  }),
+  handler: async (ctx, args) => {
+    try {
+      return await ctx.db
+        .query("todos")
+        .paginate(args.paginationOpts);
+    } catch (error) {
+      if (error.message.includes("InvalidCursor")) {
+        // Reset to first page
+        return await ctx.db
+          .query("todos")
+          .paginate({ numItems: args.paginationOpts.numItems, cursor: null });
+      }
+      throw error;
+    }
+  },
+});
+```
+
+## Sorting with Pagination
+
+### Sort by Creation Time (Default)
+
+```ts
+query.order("desc").paginate(opts); // Newest first
+query.order("asc").paginate(opts);  // Oldest first
+```
+
+### Sort by Custom Field
+
+Use an index with the sort field:
+
+```ts
+// Schema
+.index("organizationId_updatedAt", ["organizationId", "updatedAt"])
+
+// Query
+ctx.db
+  .query("todos")
+  .withIndex("organizationId_updatedAt", (q) =>
+    q.eq("organizationId", orgId)
+  )
+  .order("desc") // Sort by updatedAt descending
+  .paginate(opts);
+```
+
+## Post-Pagination Filtering
+
+For complex filters that can't use indexes, filter after pagination:
+
+```ts
+export const list = zQuery({
+  args: z.object({
+    search: z.string().optional(),
+    paginationOpts: zPaginationOpts,
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("todos")
+      .withIndex("organizationId", (q) =>
+        q.eq("organizationId", ctx.identity.activeOrganizationId)
+      )
+      .paginate(args.paginationOpts);
+
+    // Post-filter for search (if needed)
+    if (args.search) {
+      const searchLower = args.search.toLowerCase();
+      result.page = result.page.filter((todo) =>
+        todo.title.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return result;
+  },
+});
+```
+
+## Best Practices
+
+### 1. Use Indexes
+
+Always paginate with an index for performance:
+
+```ts
+// Good
+query.withIndex("organizationId", ...).paginate(opts);
+
+// Avoid
+query.filter(...).paginate(opts); // Full table scan
+```
+
+### 2. Choose Reasonable Page Sizes
+
+```ts
+{ initialNumItems: 20 }  // Good for lists
+{ initialNumItems: 50 }  // Good for tables
+{ initialNumItems: 100 } // Maximum for most cases
+```
+
+### 3. Handle Loading States
+
+```tsx
+{status === "LoadingFirstPage" && <LoadingSkeleton />}
+{status === "LoadingMore" && <Spinner />}
+{status === "Exhausted" && <p>No more items</p>}
+```
+
+Next, learn about [Authorization Patterns](/docs/advanced/authorization).

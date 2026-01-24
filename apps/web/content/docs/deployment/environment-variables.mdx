@@ -1,0 +1,287 @@
+---
+title: Production Environment Variables
+description: Managing environment variables across deployment environments
+---
+
+# Production Environment Variables
+
+Properly managing environment variables is critical for security and functionality in production.
+
+## Variable Categories
+
+### Public Variables
+
+Variables that can be exposed to the client:
+
+```bash
+# Convex deployment URL (safe to expose)
+VITE_CONVEX_URL=https://your-deployment.convex.cloud
+
+# Public API keys (rate-limited by provider)
+VITE_POSTHOG_KEY=phc_xxxxx
+```
+
+### Private Variables
+
+Variables that must stay server-side only:
+
+```bash
+# Authentication secrets
+BETTER_AUTH_SECRET=your-secret-key
+
+# OAuth credentials
+GITHUB_CLIENT_SECRET=xxxxx
+GOOGLE_CLIENT_SECRET=xxxxx
+
+# Convex deploy key
+CONVEX_DEPLOY_KEY=prod:xxxxx
+```
+
+<Callout type="error">
+Never prefix secrets with `VITE_` or `NEXT_PUBLIC_` - this exposes them to clients.
+</Callout>
+
+## Setting Variables by Platform
+
+### Vercel
+
+**Dashboard Method:**
+
+1. Go to Project Settings → Environment Variables
+2. Add each variable with appropriate scope (Production/Preview/Development)
+3. Click Save
+
+**CLI Method:**
+
+```bash
+# Add a variable
+vercel env add BETTER_AUTH_SECRET production
+
+# List variables
+vercel env ls
+```
+
+### Netlify
+
+**Dashboard Method:**
+
+1. Site Settings → Environment Variables
+2. Add variables with scope selection
+3. Save and redeploy
+
+**CLI Method:**
+
+```bash
+# Set variable
+netlify env:set BETTER_AUTH_SECRET "value"
+
+# Import from file
+netlify env:import .env.production
+```
+
+### Cloudflare Pages
+
+**Dashboard Method:**
+
+1. Settings → Environment Variables
+2. Add variables for Production and Preview
+
+**CLI Method:**
+
+```bash
+# Set secret
+wrangler secret put BETTER_AUTH_SECRET
+```
+
+### Convex Dashboard
+
+Set backend environment variables:
+
+1. Open your project at convex.dev
+2. Go to Settings → Environment Variables
+3. Add each variable
+
+**CLI Method:**
+
+```bash
+# Set variable
+bunx convex env set BETTER_AUTH_SECRET "value"
+
+# List variables
+bunx convex env list
+
+# Remove variable
+bunx convex env unset OLD_VARIABLE
+```
+
+## Required Variables by Feature
+
+### Core Application
+
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `CONVEX_URL` | Frontend | Convex deployment URL |
+| `CONVEX_DEPLOY_KEY` | CI/CD | Deploy authentication |
+
+### Better Auth
+
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `BETTER_AUTH_URL` | Both | Application base URL |
+| `BETTER_AUTH_SECRET` | Convex | Token signing secret |
+
+### OAuth Providers
+
+| Provider | Client ID | Client Secret |
+|----------|-----------|---------------|
+| GitHub | `GITHUB_CLIENT_ID` | `GITHUB_CLIENT_SECRET` |
+| Google | `GOOGLE_CLIENT_ID` | `GOOGLE_CLIENT_SECRET` |
+| Discord | `DISCORD_CLIENT_ID` | `DISCORD_CLIENT_SECRET` |
+
+## Environment-Specific Values
+
+### Development
+
+```bash
+CONVEX_URL=https://dev-deployment.convex.cloud
+BETTER_AUTH_URL=http://localhost:3000
+```
+
+### Staging/Preview
+
+```bash
+CONVEX_URL=https://staging-deployment.convex.cloud
+BETTER_AUTH_URL=https://staging.yourapp.com
+```
+
+### Production
+
+```bash
+CONVEX_URL=https://prod-deployment.convex.cloud
+BETTER_AUTH_URL=https://yourapp.com
+```
+
+## OAuth Callback URLs
+
+Configure callback URLs for each environment:
+
+### GitHub
+
+```
+# Development
+http://localhost:3000/api/auth/callback/github
+
+# Production
+https://yourapp.com/api/auth/callback/github
+```
+
+### Google
+
+Add to Authorized redirect URIs:
+
+```
+http://localhost:3000/api/auth/callback/google
+https://yourapp.com/api/auth/callback/google
+```
+
+## Secrets Management
+
+### Generating Secure Secrets
+
+```bash
+# Generate a 32-byte secret
+openssl rand -base64 32
+
+# Or using Node
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+### Rotating Secrets
+
+When rotating the `BETTER_AUTH_SECRET`:
+
+1. Generate a new secret
+2. Update in Convex: `bunx convex env set BETTER_AUTH_SECRET "new-secret"`
+3. Users will need to re-authenticate
+
+### Secret Rotation Checklist
+
+- [ ] Generate new secret
+- [ ] Update in Convex environment
+- [ ] Update in frontend hosting (if applicable)
+- [ ] Verify application works
+- [ ] Invalidate old sessions if needed
+- [ ] Document rotation date
+
+## Validation
+
+### Runtime Validation
+
+Add validation to catch missing variables early:
+
+```typescript
+// lib/env.ts
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+export const env = {
+  convexUrl: requireEnv("CONVEX_URL"),
+  betterAuthUrl: requireEnv("BETTER_AUTH_URL"),
+};
+```
+
+### Build-time Validation
+
+Validate during build:
+
+```typescript
+// In your build script or vite.config.ts
+const required = ["VITE_CONVEX_URL"];
+
+for (const key of required) {
+  if (!process.env[key]) {
+    throw new Error(`Missing ${key} environment variable`);
+  }
+}
+```
+
+## Debugging
+
+### Check Current Values
+
+```bash
+# Vercel
+vercel env ls
+
+# Convex
+bunx convex env list
+
+# In application
+console.log("CONVEX_URL:", process.env.CONVEX_URL);
+```
+
+### Common Issues
+
+**Variable not available in client:**
+- Ensure it's prefixed with `VITE_`
+- Rebuild after adding variable
+- Check that it's set for the correct environment
+
+**Variable not available in Convex:**
+- Set via `bunx convex env set`
+- Redeploy after setting
+- Check variable name matches exactly
+
+**OAuth callback errors:**
+- Verify callback URL matches exactly
+- Check for trailing slashes
+- Ensure HTTPS in production
+
+## Next Steps
+
+Your deployment is now fully configured. Review the [deployment overview](/docs/deployment/overview) for the complete deployment checklist.

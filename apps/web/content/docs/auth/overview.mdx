@@ -1,0 +1,177 @@
+---
+title: Authentication Overview
+description: Better Auth integration with Convex for secure authentication
+---
+
+# Authentication Overview
+
+This template uses [Better Auth](https://better-auth.com) integrated with Convex for full-featured authentication including organizations, teams, and role-based access control.
+
+## Architecture
+
+```
+Frontend (authClient) --> Convex HTTP (auth routes) --> Better Auth (sessions)
+                                    |
+                                    v
+                            Convex DB (users, orgs)
+```
+
+## Setup
+
+### 1. Better Auth Configuration
+
+```ts
+// auth.ts
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { ConvexAdapter } from "./betterAuth/adapter";
+
+export const auth = betterAuth({
+  database: ConvexAdapter,
+  emailAndPassword: {
+    enabled: true,
+  },
+  plugins: [
+    organization({
+      allowUserToCreateOrganization: true,
+      organizationLimit: 5,
+      teams: {
+        enabled: true,
+      },
+    }),
+  ],
+});
+```
+
+### 2. HTTP Routes
+
+```ts
+// http.ts
+import { httpRouter } from "convex/server";
+import { auth } from "./auth";
+
+const http = httpRouter();
+
+// Register all Better Auth routes under /auth/*
+auth.handler.GET(http);
+auth.handler.POST(http);
+
+export default http;
+```
+
+## Frontend Auth Client
+
+```ts
+// lib/auth.ts
+import { createAuthClient } from "better-auth/react";
+import { organizationClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  baseURL: import.meta.env.VITE_CONVEX_SITE_URL,
+  plugins: [organizationClient()],
+});
+
+export const { useSession, signIn, signUp, signOut } = authClient;
+```
+
+## Authentication Flow
+
+### Sign Up
+
+```tsx
+import { authClient } from "@/lib/auth";
+
+async function handleSignUp(email: string, password: string, name: string) {
+  const result = await authClient.signUp.email({
+    email,
+    password,
+    name,
+  });
+
+  if (result.error) {
+    // Handle error
+    return;
+  }
+  // User is now signed in with a personal organization auto-created
+}
+```
+
+### Sign In
+
+```tsx
+async function handleSignIn(email: string, password: string) {
+  const result = await authClient.signIn.email({
+    email,
+    password,
+  });
+
+  if (result.error) {
+    // Handle error
+    return;
+  }
+}
+```
+
+### Check Auth State
+
+```tsx
+import { useSession } from "@/lib/auth";
+
+function AuthStatus() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending) return <div>Loading...</div>;
+  if (!session) return <div>Not signed in</div>;
+
+  return <div>Welcome, {session.user.name}</div>;
+}
+```
+
+## Accessing Auth in Convex
+
+The template auto-injects auth context into `zQuery` and `zMutation`:
+
+```ts
+export const list = zQuery({
+  args: z.object({}),
+  handler: async (ctx) => {
+    // Auth is available on ctx.identity
+    const { userId, activeOrganizationId } = ctx.identity;
+
+    return await ctx
+      .table("todos", "organizationId", (q) =>
+        q.eq("organizationId", activeOrganizationId)
+      )
+      .collect();
+  },
+});
+```
+
+### Identity Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `userId` | `string` | User's unique ID |
+| `activeOrganizationId` | `string` | Current organization ID |
+| `activeTeamId` | `string \| null` | Current team ID |
+| `organizationRole` | `string` | User's role in the org |
+
+## Protected Routes
+
+```tsx
+// routes/dashboard/route.tsx
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { authClient } from "@/lib/auth";
+
+export const Route = createFileRoute("/dashboard")({
+  beforeLoad: async () => {
+    const session = await authClient.getSession();
+    if (!session.data) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  component: DashboardLayout,
+});
+```
+
+Next, learn about [Organizations](/docs/auth/organizations).
