@@ -61,16 +61,16 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         href: "/logo.svg",
       }
     ],
-    scripts: [
-      {
-        ...(env.VITE_DATA_BUDDY_CLIENT_ID ? {
-          src: "https://cdn.databuddy.cc/databuddy.js",
-          "data-client-id": env.VITE_DATA_BUDDY_CLIENT_ID,
-          crossOrigin: "anonymous",
-          async: true,
-        } : {}),
-      }
-    ],
+    scripts: env.VITE_DATA_BUDDY_CLIENT_ID
+      ? [
+          {
+            src: "https://cdn.databuddy.cc/databuddy.js",
+            "data-client-id": env.VITE_DATA_BUDDY_CLIENT_ID,
+            crossOrigin: "anonymous",
+            async: true,
+          },
+        ]
+      : [],
   }),
 
   component: RootDocument,

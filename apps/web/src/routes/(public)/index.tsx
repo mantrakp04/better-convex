@@ -53,8 +53,8 @@ function HomeComponent() {
             </span>
           </div>
         </section>
-        <section className="flex flex-row gap-1 rounded-lg border p-2 justify-between">
-          <div className="flex gap-2">
+        <section className="flex flex-row gap-1 rounded-lg border p-2 justify-between items-center">
+          <div className="flex gap-2 items-center">
             <a
               href="https://github.com/mantrakp04/better-convex"
               target="_blank"
@@ -76,7 +76,7 @@ function HomeComponent() {
               </svg>
             </a>
           </div>
-          <Button variant="ghost" size="icon-sm" onClick={cycleTheme} aria-label="Toggle theme">
+          <Button variant="ghost" size="icon" onClick={cycleTheme} aria-label="Toggle theme">
             <ThemeIcon className="size-4" />
           </Button>
         </section>

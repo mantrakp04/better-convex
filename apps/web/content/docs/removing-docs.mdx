@@ -1,0 +1,119 @@
+---
+title: Removing Documentation
+description: How to remove Fumadocs from this template
+---
+
+# Removing Documentation
+
+If you don't need the documentation site, you can remove Fumadocs entirely. This guide walks through the cleanup process.
+
+## Quick Removal
+
+### 1. Delete Documentation Files
+
+Remove the content and documentation routes:
+
+```bash
+# Delete docs content
+rm -rf apps/web/content
+
+# Delete docs routes
+rm -rf apps/web/src/routes/docs
+rm -f apps/web/src/routes/api/search.ts
+
+# Delete source configuration
+rm -f apps/web/src/lib/source.ts
+rm -f apps/web/src/lib/layout.shared.tsx
+```
+
+### 2. Remove Dependencies
+
+Uninstall Fumadocs packages:
+
+```bash
+cd apps/web
+bun remove fumadocs-core fumadocs-ui fumadocs-mdx
+```
+
+### 3. Clean Up Configuration
+
+Remove the MDX configuration file:
+
+```bash
+rm -f apps/web/mdx-components.tsx
+rm -f apps/web/source.config.ts
+```
+
+### 4. Update Header Navigation
+
+Edit `apps/web/src/components/header.tsx` to remove the docs link:
+
+```typescript
+// Remove this link from navigation
+<Link to="/docs">Docs</Link>
+```
+
+## Files to Remove
+
+Here's a complete list of files and folders related to documentation:
+
+| Path | Description |
+|------|-------------|
+| `apps/web/content/` | All MDX documentation content |
+| `apps/web/src/routes/docs/` | Documentation page routes |
+| `apps/web/src/routes/api/search.ts` | Search API endpoint |
+| `apps/web/src/lib/source.ts` | Fumadocs source configuration |
+| `apps/web/src/lib/layout.shared.tsx` | Shared layout components |
+| `apps/web/mdx-components.tsx` | MDX component mappings |
+| `apps/web/source.config.ts` | Fumadocs source config |
+
+## Dependencies to Remove
+
+```json
+{
+  "fumadocs-core": "remove",
+  "fumadocs-ui": "remove",
+  "fumadocs-mdx": "remove"
+}
+```
+
+## Configuration Updates
+
+### Tailwind Config
+
+If Fumadocs added presets to your Tailwind config, remove them:
+
+```typescript
+// tailwind.config.ts
+// Remove: import { createPreset } from 'fumadocs-ui/tailwind-plugin'
+// Remove fumadocs preset from presets array
+```
+
+### TypeScript Config
+
+Remove any Fumadocs-specific path aliases if added:
+
+```json
+// tsconfig.json - remove if present
+{
+  "compilerOptions": {
+    "paths": {
+      // Remove fumadocs-related paths
+    }
+  }
+}
+```
+
+## Verification
+
+After removal, verify the app still works:
+
+```bash
+# Install dependencies (cleans up removed packages)
+bun install
+
+# Start development server
+bun dev
+```
+
+Ensure there are no import errors referencing removed files.

@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Outlet } from '@tanstack/react-router';
 import { RootProvider } from 'fumadocs-ui/provider/tanstack';
 
-export const Route = createFileRoute('/docs')({
+export const Route = createFileRoute('/(public)/docs')({
   component: RouteComponent,
 })
 
