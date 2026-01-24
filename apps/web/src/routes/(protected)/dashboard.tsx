@@ -85,7 +85,7 @@ function RouteComponent() {
   if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>
     );
   }

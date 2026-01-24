@@ -50,7 +50,7 @@ export function getRouter() {
     defaultPreload: "intent",
     defaultPendingComponent: () => (
       <div className="flex h-screen items-center justify-center">
-        <Spinner className="size-16 animate-spin" />
+        <Spinner className="size-5 animate-spin" />
       </div>
     ),
     defaultNotFoundComponent: () => (

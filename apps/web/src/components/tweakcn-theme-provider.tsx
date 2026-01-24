@@ -29,15 +29,54 @@ interface ThemeProviderProps {
   enableSystem?: boolean
 }
 
+const themeScript = (storageKey: string, defaultTheme: string, attribute: string, enableSystem: boolean) => {
+  const el = document.documentElement
+  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+
+  let theme: string
+  try {
+    theme = localStorage.getItem(storageKey) || defaultTheme
+  } catch {
+    theme = defaultTheme
+  }
+
+  const resolved = theme === "system" && enableSystem ? systemTheme : theme
+
+  if (attribute === "class") {
+    el.classList.remove("light", "dark")
+    el.classList.add(resolved)
+  } else {
+    el.setAttribute(attribute, resolved)
+  }
+  el.style.colorScheme = resolved
+}
+
+export function ThemeScript({
+  storageKey = "theme",
+  defaultTheme = "dark",
+  attribute = "class",
+  enableSystem = true,
+}: Omit<ThemeProviderProps, "children">) {
+  const scriptArgs = JSON.stringify([storageKey, defaultTheme, attribute, enableSystem])
+  return (
+    <script
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{
+        __html: `(${themeScript.toString()})(${scriptArgs.slice(1, -1)})`,
+      }}
+    />
+  )
+}
+
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
+  defaultTheme = "dark",
   storageKey = "theme",
   attribute = "class",
   enableSystem = true,
 }: ThemeProviderProps) {
   const [theme, setThemeState] = React.useState<ThemeMode>(defaultTheme)
-  const [resolvedTheme, setResolvedTheme] = React.useState<"light" | "dark">("light")
+  const [resolvedTheme, setResolvedTheme] = React.useState<"light" | "dark">("dark")
 
   const getSystemTheme = React.useCallback((): "light" | "dark" => {
     if (typeof window === "undefined") return "light"
@@ -95,6 +134,7 @@ export function ThemeProvider({
 
   return (
     <ThemeContext.Provider value={value}>
+      <ThemeScript storageKey={storageKey} defaultTheme={defaultTheme} attribute={attribute} enableSystem={enableSystem} />
       {children}
     </ThemeContext.Provider>
   )
