@@ -14,11 +14,13 @@ better-convex/
 ├── apps/
 │   └── web/                    # Frontend application
 ├── packages/
-│   └── backend/
-│       └── convex/             # Convex backend
+│   ├── backend/
+│   │   └── convex/             # Convex backend
+│   ├── config/                 # Shared TypeScript config
+│   └── env/                    # Environment variables
 ├── package.json                # Root workspace config
 ├── turbo.json                  # Turborepo configuration
-└── bun.lockb                   # Bun lockfile
+└── bun.lock                    # Bun lockfile
 ```
 
 ## Frontend (`apps/web`)
@@ -30,20 +32,37 @@ apps/web/
 ├── src/
 │   ├── routes/                 # File-based routing
 │   │   ├── __root.tsx          # Root layout
-│   │   ├── index.tsx           # Home page
-│   │   ├── dashboard/          # Dashboard routes
-│   │   └── docs/               # Documentation routes
+│   │   ├── (protected)/        # Auth-required routes
+│   │   │   ├── dashboard.tsx   # Dashboard page
+│   │   │   └── settings/       # Settings pages
+│   │   ├── (public)/           # Public routes
+│   │   │   ├── index.tsx       # Home page
+│   │   │   ├── auth.tsx        # Auth page
+│   │   │   └── docs/           # Documentation routes
+│   │   └── api/                # API routes
+│   │       └── auth/           # Auth API handlers
 │   ├── components/             # React components
 │   │   ├── ui/                 # shadcn/ui components
-│   │   └── ...                 # Feature components
+│   │   ├── auth/               # Auth components
+│   │   ├── dashboard/          # Dashboard components
+│   │   └── todos/              # Todo feature components
+│   ├── hooks/                  # Custom React hooks
+│   │   ├── auth/               # Auth hooks
+│   │   │   ├── organization/   # Organization hooks
+│   │   │   └── user/           # User hooks
+│   │   ├── use-todos.ts        # Todo hooks
+│   │   └── use-paginated-query.ts
 │   ├── lib/                    # Utilities and configs
-│   │   ├── auth.ts             # Auth client setup
-│   │   ├── convex.ts           # Convex client setup
-│   │   └── source.ts           # Fumadocs config
-│   └── hooks/                  # Custom React hooks
+│   │   ├── auth-client.ts      # Auth client setup
+│   │   ├── auth-server.ts      # Auth server setup
+│   │   ├── source.ts           # Fumadocs config
+│   │   ├── tweakcn.ts          # Theme utilities
+│   │   └── utils.ts            # General utilities
+│   ├── store/                  # State management
+│   └── utils/                  # Helper utilities
 ├── content/
 │   └── docs/                   # MDX documentation files
-└── app.config.ts               # TanStack Start config
+└── vite.config.ts              # Vite configuration
 ```
 
 ## Backend (`packages/backend/convex`)
@@ -53,15 +72,14 @@ The Convex backend contains all server-side logic:
 ```
 packages/backend/convex/
 ├── _generated/                 # Auto-generated types (don't edit)
-│   ├── api.d.ts                # API type definitions
-│   ├── dataModel.d.ts          # Database types
-│   └── server.d.ts             # Server utilities
 ├── schema.ts                   # Database schema with Ents
 ├── functions.ts                # zQuery/zMutation factories
 ├── convex.config.ts            # Convex app configuration
 ├── auth.ts                     # Better Auth setup
 ├── auth.config.ts              # JWT provider config
 ├── http.ts                     # HTTP routes
+├── healthCheck.ts              # Health check endpoint
+├── privateData.ts              # Private data queries
 ├── tables/                     # Entity definitions
 │   ├── todos.ts                # Todo entity
 │   └── todoAssignedUsers.ts    # Junction table
@@ -73,13 +91,23 @@ packages/backend/convex/
 │   ├── statsTypes.ts           # Statistics schemas
 │   └── aggregates.ts           # Aggregate definitions
 ├── betterAuth/                 # Better Auth integration
+│   ├── _generated/             # Auth generated types
 │   ├── schema.ts               # Auth database schema
 │   ├── adapter.ts              # Convex adapter
 │   ├── auth.ts                 # Auth client
 │   └── convex.config.ts        # Auth plugin config
-└── shared/
-    └── auth_shared.ts          # Access control utilities
+└── shared/                     # Shared utilities
 ```
+
+## Shared Packages
+
+### `packages/config`
+
+Shared TypeScript configuration for the monorepo.
+
+### `packages/env`
+
+Centralized environment variable management with type-safe validation.
 
 ## Key Files Explained
 

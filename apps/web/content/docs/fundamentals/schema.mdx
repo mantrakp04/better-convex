@@ -5,36 +5,25 @@ description: Define your database schema with Convex validators
 
 # Schema Design
 
-Convex uses a schema to define your database structure. This template uses Convex Ents for enhanced type safety and relationships.
+Convex uses a schema to define your database structure. This template uses Convex Ents for enhanced type safety and relationships, combined with Zod schemas for validation.
 
-## Basic Schema
+## Schema Structure
 
-A Convex schema defines tables and their fields using validators:
+The schema is organized with each table defined in its own file under `tables/`:
 
 ```ts
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+// schema.ts
+import { defineEntSchema, getEntDefinitions } from "convex-ents";
+import { todosEnt } from "./tables/todos";
+import { todoAssignedUsersEnt } from "./tables/todoAssignedUsers";
 
-export default defineSchema({
-  todos: defineTable({
-    title: v.string(),
-    status: v.union(
-      v.literal("todo"),
-      v.literal("in_progress"),
-      v.literal("done")
-    ),
-    priority: v.union(
-      v.literal("low"),
-      v.literal("medium"),
-      v.literal("high")
-    ),
-    dueDate: v.optional(v.number()),
-    organizationId: v.string(),
-    userId: v.string(),
-    teamId: v.optional(v.string()),
-    updatedAt: v.number(),
-  }),
+const schema = defineEntSchema({
+  todos: todosEnt,
+  todoAssignedUsers: todoAssignedUsersEnt,
 });
+
+export default schema;
+export const entDefinitions = getEntDefinitions(schema);
 ```
 
 ## Validators
@@ -55,89 +44,106 @@ Convex provides built-in validators for type safety:
 
 ## Indexes
 
-Indexes are crucial for query performance. Define them in your schema:
+Indexes are crucial for query performance. Define them on your table:
 
 ```ts
-defineTable({
-  title: v.string(),
-  status: v.string(),
-  organizationId: v.string(),
-  userId: v.string(),
-  teamId: v.optional(v.string()),
-})
-  // Single-field indexes
-  .index("organizationId", ["organizationId"])
-  .index("userId", ["userId"])
-
-  // Composite indexes for filtering
-  .index("organizationId_status", ["organizationId", "status"])
-  .index("organizationId_userId", ["organizationId", "userId"])
-  .index("organizationId_teamId", ["organizationId", "teamId"])
+const todosTable = Todos.table
+  // Composite indexes with sort field last
+  .index("organizationId_userId", ["organizationId", "userId", "updatedAt"])
+  .index("organizationId", ["organizationId", "updatedAt"])
+  .index("organizationId_teamId", ["organizationId", "teamId", "updatedAt"])
+  // Single-field index
+  .index("userId", ["userId"]);
 ```
 
 ### Index Usage Guidelines
 
 1. **Query by exact match**: Index fields in the order you filter them
 2. **Range queries**: Put the range field last in the index
-3. **Sorting**: Include sort fields after filter fields
+3. **Sorting**: Include sort fields (like `updatedAt`) after filter fields for efficient ordering
 
 ```ts
-// This query uses "organizationId_status" index
+// This query uses "organizationId" index with updatedAt for sorting
 ctx.db.query("todos")
-  .withIndex("organizationId_status", (q) =>
-    q.eq("organizationId", orgId).eq("status", "todo")
+  .withIndex("organizationId", (q) =>
+    q.eq("organizationId", orgId)
   )
+  .order("desc") // Orders by updatedAt (last field in index)
   .collect();
 ```
 
-## Schema with Convex Ents
+## Defining Tables with Zod
 
-This template uses Convex Ents for relationship management. Here's how the todo table is defined:
+This template uses Zod schemas with `convex-helpers` to define fields, providing both runtime validation and type inference:
 
 ```ts
 // tables/todos.ts
-import { defineEnt, defineEntSchema, getEntDefinitions } from "convex-ents";
+import { z } from "zod";
+import { defineEntFromTable } from "convex-ents";
+import { Table } from "convex-helpers/server";
+import { zodToConvexFields } from "convex-helpers/server/zod4";
+
+export const todosZodSchema = {
+  organizationId: z.string(),
+  userId: z.string(),
+  teamId: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  status: z.enum(["todo", "in_progress", "done"]).default("todo"),
+  dueDate: z.number().nullable().optional(),
+  startTime: z.number().nullable().optional(),
+  endTime: z.number().nullable().optional(),
+  priority: z.enum(["low", "medium", "high"]).default("medium"),
+  updatedAt: z.number(),
+};
+
+// Convert Zod schema to Convex fields
+export const todosFields = zodToConvexFields(todosZodSchema);
+
+// Create a Table helper for type-safe queries
+export const Todos = Table("todos", todosFields);
+
+// Define indexes and edges
+const todosTable = Todos.table
+  .index("organizationId_userId", ["organizationId", "userId", "updatedAt"])
+  .index("organizationId", ["organizationId", "updatedAt"])
+  .index("organizationId_teamId", ["organizationId", "teamId", "updatedAt"])
+  .index("userId", ["userId"]);
+
+export const todosEnt = defineEntFromTable(todosTable)
+  .edges("assignedUsers", { to: "todoAssignedUsers", ref: "todoId" });
+```
+
+## Junction Tables
+
+For many-to-many relationships, define a junction table:
+
+```ts
+// tables/todoAssignedUsers.ts
+import { z } from "zod";
+import { defineEntFromTable } from "convex-ents";
+import { Table } from "convex-helpers/server";
+import { zodToConvexFields } from "convex-helpers/server/zod4";
 import { v } from "convex/values";
 
-const entSchema = defineEntSchema({
-  todos: defineEnt({
-    title: v.string(),
-    description: v.optional(v.string()),
-    status: v.union(
-      v.literal("todo"),
-      v.literal("in_progress"),
-      v.literal("done")
-    ),
-    priority: v.union(
-      v.literal("low"),
-      v.literal("medium"),
-      v.literal("high")
-    ),
-    dueDate: v.optional(v.number()),
-    organizationId: v.string(),
-    userId: v.string(),
-    teamId: v.optional(v.string()),
-    updatedAt: v.number(),
-  })
-    .index("organizationId", ["organizationId"])
-    .index("organizationId_userId", ["organizationId", "userId"])
-    .index("organizationId_teamId", ["organizationId", "teamId"])
-    .index("userId", ["userId"])
-    // Define edge to junction table
-    .edges("todoAssignedUsers", { ref: true }),
+export const todoAssignedUsersZodSchema = {
+  userId: z.string(),
+  assignedBy: z.string(),
+};
 
-  todoAssignedUsers: defineEnt({
-    todoId: v.id("todos"),
-    userId: v.string(),
-    assignedBy: v.string(),
-    assignedAt: v.number(),
-  })
-    .index("userId", ["userId"])
-    .index("todoId_userId", ["todoId", "userId"])
-    .edge("todo"),
-});
+export const todoAssignedUsersFields = {
+  ...zodToConvexFields(todoAssignedUsersZodSchema),
+  todoId: v.id("todos"),
+};
 
-export const entDefinitions = getEntDefinitions(entSchema);
+export const TodoAssignedUsers = Table("todoAssignedUsers", todoAssignedUsersFields);
+
+const todoAssignedUsersTable = TodoAssignedUsers.table
+  .index("userId", ["userId"])
+  .index("todoId_userId", ["todoId", "userId"]);
+
+export const todoAssignedUsersEnt = defineEntFromTable(todoAssignedUsersTable)
+  .edge("todo", { to: "todos", field: "todoId" });
 ```
 
 ## Generated Types
@@ -169,24 +175,53 @@ type TodoId = Id<"todos">;
 
 ## Schema Migrations
 
-When you change your schema:
+Convex enforces that your schema must always match existing data. Use the `@convex-dev/migrations` component for safe, resumable migrations.
 
-1. **Adding fields**: Add with `v.optional()` first, then backfill
-2. **Removing fields**: Deploy removal, data remains until cleaned
-3. **Changing types**: Create migration mutation to transform data
+### Safe Schema Changes
+
+1. **Adding fields**: Add with `v.optional()` first, backfill data, then make required
+2. **Removing fields**: Mark as `v.optional()`, remove data from documents, then remove from schema
+3. **Changing types**: Use `v.union()` of old and new types, migrate data, then update to new type only
+
+### Using the Migrations Component
 
 ```ts
-// Migration example: Add default updatedAt
-export const migrateUpdatedAt = internalMutation({
-  handler: async (ctx) => {
-    const todos = await ctx.db.query("todos").collect();
-    for (const todo of todos) {
-      if (!todo.updatedAt) {
-        await ctx.db.patch(todo._id, { updatedAt: todo._creationTime });
-      }
+// convex/migrations.ts
+import { Migrations } from "@convex-dev/migrations";
+import { components } from "./_generated/api";
+
+export const migrations = new Migrations(components.migrations);
+
+// Define a migration to backfill updatedAt
+export const backfillUpdatedAt = migrations.define({
+  table: "todos",
+  migrateOne: (ctx, doc) => {
+    if (!doc.updatedAt) {
+      return { updatedAt: doc._creationTime };
     }
   },
 });
+
+// Define a migration to clear an optional field
+export const clearField = migrations.define({
+  table: "todos",
+  batchSize: 10, // Customize batch size for large documents
+  migrateOne: () => ({ optionalField: undefined }),
+});
 ```
+
+### Running Migrations
+
+```ts
+// Run a single migration
+await migrations.runOne(ctx, internal.migrations.backfillUpdatedAt);
+
+// Override batch size for specific runs
+await migrations.runOne(ctx, internal.migrations.clearField, {
+  batchSize: 1,
+});
+```
+
+The migrations component handles batching, resumption from failures, and dry runs for validation.
 
 Next, learn about [Zod Validation](/docs/fundamentals/zod-validation).

@@ -42,35 +42,29 @@ bun run dev:setup
 Set the required environment variables in Convex:
 
 ```bash
+cd packages/backend
 bunx convex env set BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 bunx convex env set SITE_URL http://localhost:3001
+bunx convex run auth:getLatestJwks | bunx convex env set JWKS
 ```
 
-### 5. Set Up JWKS for Auth Token Validation
 
-Generate and set the JWKS environment variable for Better Auth:
+Set the following environment variables in `apps/web/.env`:
 
 ```bash
-cd packages/backend && bunx convex run auth:getLatestJwks | bunx convex env set JWKS
+VITE_CONVEX_URL=https://<your-project>.convex.cloud # (located at `packages/backend/.env.local`)
+VITE_CONVEX_SITE_URL=https://<your-project>.convex.site # (located at `packages/backend/.env.local`)
+VITE_SITE_URL=http://localhost:3001
+VITE_DATA_BUDDY_CLIENT_ID=<optional>
 ```
 
-### 6. Start Development Server
+### 5. Start Development Server
 
 ```bash
 bun run dev
 ```
 
 Open [http://localhost:3001](http://localhost:3001) in your browser.
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_CONVEX_URL` | Convex deployment URL |
-| `VITE_CONVEX_SITE_URL` | Convex site URL for file serving |
-| `VITE_SITE_URL` | Your frontend application URL |
-| `JWKS` | JSON Web Key Set for token validation |
-| `VITE_DATA_BUDDY_CLIENT_ID` | (Optional) DataBuddy analytics client ID |
 
 ## Available Scripts
 
