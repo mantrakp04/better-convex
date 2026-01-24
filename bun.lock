@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "better-convex",
+      "name": "just-use-convex",
       "dependencies": {
         "@just-use-convex/env": "workspace:*",
         "dotenv": "catalog:",
