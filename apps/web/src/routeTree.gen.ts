@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as publicRouteRouteImport } from './routes/(public)/route'
 import { Route as protectedRouteRouteImport } from './routes/(protected)/route'
 import { Route as publicIndexRouteImport } from './routes/(public)/index'
+import { Route as DocsSplatRouteImport } from './routes/docs/$'
+import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as publicAuthRouteImport } from './routes/(public)/auth'
 import { Route as protectedDashboardRouteImport } from './routes/(protected)/dashboard'
 import { Route as protectedSettingsRouteRouteImport } from './routes/(protected)/settings/route'
@@ -34,6 +36,16 @@ const publicIndexRoute = publicIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => publicRouteRoute,
+} as any)
+const DocsSplatRoute = DocsSplatRouteImport.update({
+  id: '/docs/$',
+  path: '/docs/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSearchRoute = ApiSearchRouteImport.update({
+  id: '/api/search',
+  path: '/api/search',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const publicAuthRoute = publicAuthRouteImport.update({
   id: '/auth',
@@ -89,6 +101,8 @@ export interface FileRoutesByFullPath {
   '/settings': typeof protectedSettingsRouteRouteWithChildren
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
+  '/api/search': typeof ApiSearchRoute
+  '/docs/$': typeof DocsSplatRoute
   '/': typeof publicIndexRoute
   '/settings/organization': typeof protectedSettingsOrganizationRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -100,6 +114,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
+  '/api/search': typeof ApiSearchRoute
+  '/docs/$': typeof DocsSplatRoute
   '/': typeof publicIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/settings': typeof protectedSettingsIndexRoute
@@ -114,6 +130,8 @@ export interface FileRoutesById {
   '/(protected)/settings': typeof protectedSettingsRouteRouteWithChildren
   '/(protected)/dashboard': typeof protectedDashboardRoute
   '/(public)/auth': typeof publicAuthRoute
+  '/api/search': typeof ApiSearchRoute
+  '/docs/$': typeof DocsSplatRoute
   '/(public)/': typeof publicIndexRoute
   '/(protected)/settings/organization': typeof protectedSettingsOrganizationRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -128,6 +146,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/dashboard'
     | '/auth'
+    | '/api/search'
+    | '/docs/$'
     | '/'
     | '/settings/organization'
     | '/api/auth/$'
@@ -139,6 +159,8 @@ export interface FileRouteTypes {
   to:
     | '/dashboard'
     | '/auth'
+    | '/api/search'
+    | '/docs/$'
     | '/'
     | '/api/auth/$'
     | '/settings'
@@ -152,6 +174,8 @@ export interface FileRouteTypes {
     | '/(protected)/settings'
     | '/(protected)/dashboard'
     | '/(public)/auth'
+    | '/api/search'
+    | '/docs/$'
     | '/(public)/'
     | '/(protected)/settings/organization'
     | '/api/auth/$'
@@ -164,6 +188,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   protectedRouteRoute: typeof protectedRouteRouteWithChildren
   publicRouteRoute: typeof publicRouteRouteWithChildren
+  ApiSearchRoute: typeof ApiSearchRoute
+  DocsSplatRoute: typeof DocsSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -189,6 +215,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof publicIndexRouteImport
       parentRoute: typeof publicRouteRoute
+    }
+    '/docs/$': {
+      id: '/docs/$'
+      path: '/docs/$'
+      fullPath: '/docs/$'
+      preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/search': {
+      id: '/api/search'
+      path: '/api/search'
+      fullPath: '/api/search'
+      preLoaderRoute: typeof ApiSearchRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/(public)/auth': {
       id: '/(public)/auth'
@@ -325,6 +365,8 @@ const publicRouteRouteWithChildren = publicRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   protectedRouteRoute: protectedRouteRouteWithChildren,
   publicRouteRoute: publicRouteRouteWithChildren,
+  ApiSearchRoute: ApiSearchRoute,
+  DocsSplatRoute: DocsSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

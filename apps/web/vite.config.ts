@@ -4,9 +4,11 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { nitro } from 'nitro/vite'
+import mdx from 'fumadocs-mdx/vite';
+import * as MdxConfig from './source.config';
 
 export default defineConfig({
-  plugins: [tsconfigPaths(), tailwindcss(), tanstackStart(), viteReact(), nitro()],
+  plugins: [mdx(MdxConfig), tsconfigPaths(), tailwindcss(), tanstackStart(), viteReact(), nitro()],
   server: {
     port: 3001,
   },

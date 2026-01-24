@@ -16,8 +16,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
 import { seo } from '@/utils/seo'
+import { RootProvider } from 'fumadocs-ui/provider/tanstack';
 
 import Header from "../components/header";
+import { env } from "@better-convex/env/web";
 
 const getAuth = createServerFn({ method: "GET" }).handler(async () => {
   return await getToken();
@@ -61,10 +63,12 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     ],
     scripts: [
       {
-        src: "https://cdn.databuddy.cc/databuddy.js",
-        "data-client-id": "2defdb0a-1d75-48c4-a507-c340ea98f8f7",
-        crossorigin: "anonymous",
-        async: true,
+        ...(env.VITE_DATA_BUDDY_CLIENT_ID ? {
+          src: "https://cdn.databuddy.cc/databuddy.js",
+          "data-client-id": env.VITE_DATA_BUDDY_CLIENT_ID,
+          crossOrigin: "anonymous",
+          async: true,
+        } : {}),
       }
     ],
   }),
@@ -90,14 +94,18 @@ function RootDocument() {
       authClient={authClient}
       initialToken={context.token}
     >
-      <html lang="en" className="dark">
+      <html lang="en" className="dark" suppressHydrationWarning>
         <head>
           <HeadContent />
         </head>
         <body>
           <div className="grid h-svh grid-rows-[auto_1fr]">
-            <Header />
-            <Outlet />
+            <div className="relative z-50">
+              <Header />
+            </div>
+            <RootProvider>
+              <Outlet />
+            </RootProvider>
           </div>
           <Toaster richColors />
           <TanStackRouterDevtools position="bottom-left" />

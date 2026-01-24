@@ -23,7 +23,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["../../packages/backend/convex/*"]
+      "@convex/*": ["../../packages/backend/convex/*"],
+      "fumadocs-mdx:collections/*": [".source/*"]
     }
   }
 }

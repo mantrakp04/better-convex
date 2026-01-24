@@ -30,6 +30,12 @@ Skip weeks of boilerplate setup. This template provides:
 - **Aggregate system** - Real-time statistics via `@convex-dev/aggregate`
 - **Pagination utilities** - Cursor-based pagination with infinite scroll support
 
+### Documentation Site
+Built-in documentation powered by Fumadocs:
+- MDX content at `apps/web/content/docs/`
+- Full-text search via `/api/search`
+- Accessible at `/docs` route
+
 ### Demo Application
 Includes a fully-featured todo app demonstrating all patterns:
 - Kanban, list, and calendar views
@@ -49,7 +55,7 @@ Includes a fully-featured todo app demonstrating all patterns:
 | TanStack Query | Server state management with Convex integration |
 | TailwindCSS v4 | Utility-first styling |
 | shadcn/ui | 53 pre-built UI components |
-| Motion | Animations |
+| Fumadocs | Documentation site with MDX support |
 
 ### Backend
 | Technology | Purpose |
@@ -118,13 +124,16 @@ bun run dev
 better-convex/
 ├── apps/
 │   └── web/                    # React + TanStack Start frontend
+│       ├── content/
+│       │   └── docs/           # Documentation MDX files
 │       ├── src/
 │       │   ├── components/     # UI components (shadcn/ui + custom)
 │       │   ├── hooks/          # Custom React hooks
 │       │   ├── lib/            # Utilities and auth client
 │       │   └── routes/         # File-based routing
 │       │       ├── (public)/   # Auth pages (sign in/up)
-│       │       └── (protected)/ # Dashboard & settings
+│       │       ├── (protected)/ # Dashboard & settings
+│       │       └── docs/       # Documentation pages (Fumadocs)
 ├── packages/
 │   ├── backend/                # Convex backend
 │   │   └── convex/
@@ -223,6 +232,7 @@ const stats = useQuery(api.statistics.getOrgStats);
 |----------|-------------|
 | `VITE_CONVEX_URL` | Convex deployment URL |
 | `VITE_CONVEX_SITE_URL` | Frontend application URL |
+| `VITE_DATA_BUDDY_CLIENT_ID` | (Optional) DataBuddy analytics client ID |
 | `JWKS` | JSON Web Key Set for token validation |
 
 ## Customizing the Template
