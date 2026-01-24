@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider } from "@/components/tweakcn-theme-provider";
 import appCss from "../index.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";

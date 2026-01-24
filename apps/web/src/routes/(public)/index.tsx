@@ -2,9 +2,8 @@ import { api } from "@better-convex/backend/convex/_generated/api";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Github, Sun, Moon, Monitor } from "lucide-react";
-import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
+import { Github } from "lucide-react";
+import { ThemePicker } from "@/components/tweakcn-theme-picker";
 
 export const Route = createFileRoute("/(public)/")({
   component: HomeComponent,
@@ -28,15 +27,6 @@ const TITLE_TEXT = `
 
 function HomeComponent() {
   const healthCheck = useSuspenseQuery(convexQuery(api.healthCheck.get, {}));
-  const { theme, setTheme } = useTheme();
-
-  const cycleTheme = () => {
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
-  };
-
-  const ThemeIcon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
 
   return (
     <div className="container mx-auto flex w-4xl flex-col gap-2 p-2">
@@ -76,9 +66,7 @@ function HomeComponent() {
               </svg>
             </a>
           </div>
-          <Button variant="ghost" size="icon" onClick={cycleTheme} aria-label="Toggle theme">
-            <ThemeIcon className="size-4" />
-          </Button>
+          <ThemePicker />
         </section>
       </div>
     </div>
