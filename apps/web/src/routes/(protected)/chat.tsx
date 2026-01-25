@@ -5,6 +5,7 @@ import type { UIMessage } from "@ai-sdk/react";
 import { useMemo } from "react";
 import { useOpenRouterModels } from "@/hooks/use-openrouter-models";
 import { ChatInput, type ChatInputProps } from "@/components/chat";
+import type { QueueTodo } from "@/components/ai-elements/queue";
 import {
   Conversation,
   ConversationContent,
@@ -45,6 +46,40 @@ function ChatPage() {
     () => models.find((m) => m.slug === settings.model),
     [models, settings.model]
   );
+
+  // Derive state from the most recent assistant message's tool calls
+  const derivedState = useMemo(() => {
+    const state = {
+      todos: [] as QueueTodo[],
+      // Add additional fields here as needed
+    };
+
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role !== "assistant") return state;
+
+    for (const part of lastMsg.parts) {
+      if (part.type !== "dynamic-tool") continue;
+
+      switch (part.toolName) {
+        case "write_todos": {
+          const output = part.output as {
+            update?: { todos?: Array<{ content: string; status: string }> };
+          };
+          if (output?.update?.todos) {
+            state.todos = output.update.todos.map((t, idx) => ({
+              id: `todo-${idx}`,
+              title: t.content,
+              status: t.status as "pending" | "in_progress" | "completed",
+            }));
+          }
+          break;
+        }
+        // Add additional tool handlers here
+      }
+    }
+
+    return state;
+  }, [messages]);
 
   const handleSubmit: ChatInputProps["onSubmit"] = async ({ text, files }) => {
     if (!text.trim() && files.length === 0) return;
@@ -111,6 +146,7 @@ function ChatPage() {
         groupedModels={groupedModels}
         models={models}
         selectedModel={selectedModel}
+        todos={derivedState.todos}
       />
     </div>
   );

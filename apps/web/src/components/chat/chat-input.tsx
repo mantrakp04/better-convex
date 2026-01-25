@@ -18,6 +18,8 @@ import {
   AttachmentRemove,
 } from "@/components/ai-elements/attachments";
 import { ChatModelSelector } from "./chat-model-selector";
+import { TodosDisplay } from "./todos-display";
+import type { QueueTodo } from "@/components/ai-elements/queue";
 
 export type ChatInputProps = {
   onSubmit: (message: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => void;
@@ -28,6 +30,7 @@ export type ChatInputProps = {
   groupedModels: [string, OpenRouterModel[]][];
   models: OpenRouterModel[];
   selectedModel?: OpenRouterModel;
+  todos?: QueueTodo[];
 };
 
 export function ChatInput({
@@ -39,9 +42,11 @@ export function ChatInput({
   groupedModels,
   models,
   selectedModel,
+  todos = [],
 }: ChatInputProps) {
   return (
     <div className="pb-1 mx-auto w-4xl">
+      <TodosDisplay todos={todos} />
       <PromptInput
         onSubmit={({ text, files }) => onSubmit({ text, files })}
         accept="image/*,application/pdf"
