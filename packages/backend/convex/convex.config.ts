@@ -18,4 +18,8 @@ app.use(aggregate, { name: "todosByTeamStatus" });
 app.use(aggregate, { name: "todosByCreator" });
 app.use(aggregate, { name: "todosByCreatorStatus" });
 
+// Chat aggregates
+app.use(aggregate, { name: "chatsByOrg" });
+app.use(aggregate, { name: "chatsByUser" });
+
 export default app;

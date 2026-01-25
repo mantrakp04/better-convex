@@ -14,12 +14,18 @@ import { entDefinitions } from "./schema";
 import type { DataModel } from "./_generated/dataModel";
 import { v, type Infer } from "convex/values";
 import { allTodoAggregates } from "./todos/aggregates";
+import { allChatAggregates } from "./chats/aggregates";
 
 const triggers = new Triggers<DataModel>();
 
 // Register all aggregate triggers for todos table
 for (const aggregate of allTodoAggregates) {
   triggers.register("todos", aggregate.trigger());
+}
+
+// Register all aggregate triggers for chats table
+for (const aggregate of allChatAggregates) {
+  triggers.register("chats", aggregate.trigger());
 }
 
 // Wrap base mutations with triggers
