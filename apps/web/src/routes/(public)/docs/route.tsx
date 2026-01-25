@@ -8,7 +8,7 @@ export const Route = createFileRoute('/(public)/docs')({
 
 function RouteComponent() {
   return (
-    <div className="absolute w-full h-svh">
+    <div className="absolute w-full h-svh overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
       <RootProvider>
         <Outlet />
       </RootProvider>
