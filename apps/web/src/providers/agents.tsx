@@ -3,11 +3,18 @@ import {
   useContext,
   useCallback,
   useSyncExternalStore,
+  useState,
   type ReactNode,
 } from "react";
 import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { env } from "@just-use-convex/env/web";
+
+// Chat settings state that gets synced to the agent
+export type ChatSettings = {
+  model?: string;
+  reasoningEffort?: "low" | "medium" | "high";
+};
 
 type AgentChatOptions = {
   agentType?: string;
@@ -69,17 +76,6 @@ type UseAgentChatOptions = AgentChatOptions & {
   name: string;
 };
 
-/**
- * Hook to get or create an agent chat instance.
- * Uses a getOrCreate pattern - if an instance with the given name exists, it returns it.
- * Otherwise, it creates a new instance and stores it.
- *
- * @param options.name - Unique identifier for this agent chat instance
- * @param options.agentType - The agent type (default: "agent")
- * @param options.host - The agent host URL (default: env.VITE_AGENT_URL)
- * @param options.credentials - Request credentials (default: "include")
- * @param options.onError - Error callback
- */
 export function useAgentChatInstance(options: UseAgentChatOptions) {
   const { name, agentType = "agent", host = env.VITE_AGENT_URL, credentials = "include", onError } = options;
 
@@ -91,10 +87,19 @@ export function useAgentChatInstance(options: UseAgentChatOptions) {
     store.getSnapshot
   );
 
-  const agent = useAgent({
+  // Local state for chat settings that syncs with the agent
+  const [settings, setSettingsLocal] = useState<ChatSettings>({});
+
+  const agent = useAgent<ChatSettings>({
     agent: agentType,
     name,
     host,
+    onStateUpdate: (state, source) => {
+      // Sync state from server to local
+      if (source === "server" && state) {
+        setSettingsLocal(state);
+      }
+    },
   });
 
   const chat = useAgentChat({
@@ -114,11 +119,28 @@ export function useAgentChatInstance(options: UseAgentChatOptions) {
     [store]
   );
 
+  // Update settings both locally and on the agent
+  const setSettings = useCallback(
+    (newSettings: ChatSettings | ((prev: ChatSettings) => ChatSettings)) => {
+      setSettingsLocal((prev) => {
+        const updated = typeof newSettings === "function" ? newSettings(prev) : newSettings;
+        // Sync to agent
+        if (agent) {
+          agent.setState(updated);
+        }
+        return updated;
+      });
+    },
+    [agent]
+  );
+
   return {
     ...chat,
     agent,
     getInstance,
     isConnected: !!agent,
+    settings,
+    setSettings,
   };
 }
 

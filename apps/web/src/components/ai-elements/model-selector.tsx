@@ -1,3 +1,7 @@
+import { useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { ChevronUp, ChevronDown, Grid2X2, Star, FileText, Eye, Sparkles } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   Command,
   CommandDialog,
@@ -42,13 +46,13 @@ export const ModelSelectorContent = ({
 }: ModelSelectorContentProps) => (
   <DialogContent
     className={cn(
-      "outline! border-none! p-0 outline-border! outline-solid!",
+      "outline! border-none! p-0 outline-border! outline-solid! rounded-lg",
       className
     )}
     {...props}
   >
     <DialogTitle className="sr-only">{title}</DialogTitle>
-    <Command className="**:data-[slot=command-input-wrapper]:h-auto">
+    <Command className="**:data-[slot=command-input-wrapper]:h-auto p-0 rounded-lg">
       {children}
     </Command>
   </DialogContent>
@@ -168,6 +172,9 @@ export type ModelSelectorLogoProps = Omit<
     | "scaleway"
     | "amazon-bedrock"
     | "cerebras"
+    | "black-forest-labs"
+    | "minimax"
+    | "zhipuai"
     | (string & {});
 };
 
@@ -208,4 +215,159 @@ export const ModelSelectorName = ({
   ...props
 }: ModelSelectorNameProps) => (
   <span className={cn("flex-1 truncate text-left", className)} {...props} />
+);
+
+// Description text component
+export type ModelSelectorDescriptionProps = ComponentProps<"p">;
+
+export const ModelSelectorDescription = ({
+  className,
+  ...props
+}: ModelSelectorDescriptionProps) => (
+  <p
+    className={cn("text-xs text-muted-foreground/70 truncate", className)}
+    {...props}
+  />
+);
+
+// Provider filter sidebar
+export type ModelSelectorSidebarProps = ComponentProps<"div">;
+
+export const ModelSelectorSidebar = ({
+  className,
+  children,
+  ...props
+}: ModelSelectorSidebarProps) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const ITEM_HEIGHT = 40; // Approximate height of icon buttons
+  const ITEMS_TO_SCROLL = 3;
+  const SCROLL_DISTANCE = ITEM_HEIGHT * ITEMS_TO_SCROLL;
+
+  const handleScroll = (direction: "up" | "down", isCtrlClick: boolean) => {
+    if (!scrollContainerRef.current) return;
+
+    const container = scrollContainerRef.current;
+    const targetScroll = isCtrlClick
+      ? direction === "up"
+        ? 0
+        : container.scrollHeight - container.clientHeight
+      : container.scrollTop + (direction === "down" ? SCROLL_DISTANCE : -SCROLL_DISTANCE);
+
+    container.scrollTo({
+      top: targetScroll,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <div className="flex flex-col items-center shrink-0 min-h-0 border-r border-border py-2">
+      <Button
+        variant="outline"
+        size="icon-sm"
+        className="rounded-full"
+        onClick={(e) => handleScroll("up", e.ctrlKey || e.metaKey)}
+      >
+        <ChevronUp className="size-4" />
+      </Button>
+      <div
+        ref={scrollContainerRef}
+        className={cn(
+          "flex flex-col gap-1 p-1 overflow-y-auto scrollbar-none flex-1 min-h-0 max-h-[28rem]",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        className="rounded-full"
+        onClick={(e) => handleScroll("down", e.ctrlKey || e.metaKey)}
+      >
+        <ChevronDown className="size-4" />
+      </Button>
+    </div>
+  );
+};
+
+// Individual provider button
+export type ModelSelectorProviderButtonProps = {
+  provider: string;
+  displayName?: string;
+  isSelected?: boolean;
+  onClick?: () => void;
+  className?: string;
+};
+
+export const ModelSelectorProviderButton = ({
+  provider,
+  displayName,
+  isSelected,
+  onClick,
+  className,
+}: ModelSelectorProviderButtonProps) => (
+  <Tooltip>
+    <TooltipTrigger
+      render={
+        <Button variant="ghost" size="icon-lg" className={cn(isSelected ? "bg-primary/20 ring-1 ring-primary/50" : "hover:bg-muted/80", "cursor-pointer", className)} onClick={onClick}>
+          {provider === "all" ? (
+            <Grid2X2 className="size-4 text-muted-foreground" />
+          ) : provider === "favorites" ? (
+            <Star className="size-4 text-amber-500" />
+          ) : (
+            <ModelSelectorLogo provider={provider} className="size-4" />
+          )}
+        </Button>
+      }
+    />
+    <TooltipContent side="right">
+      {provider === "all"
+        ? "All providers"
+        : provider === "favorites"
+          ? "Favorites"
+          : displayName ?? provider}
+    </TooltipContent>
+  </Tooltip>
+);
+
+// Capability badge
+export type ModelSelectorBadgeProps = {
+  type: "reasoning" | "vision" | "large-context";
+  className?: string;
+};
+
+export const ModelSelectorBadge = ({
+  type,
+  className,
+}: ModelSelectorBadgeProps) => {
+  const icons = {
+    reasoning: <Sparkles className="size-3" />,
+    vision: <Eye className="size-3" />,
+    "large-context": <FileText className="size-3" />,
+  };
+  const colors = {
+    reasoning: "text-amber-500",
+    vision: "text-blue-400",
+    "large-context": "text-emerald-400",
+  };
+  return (
+    <span className={cn("opacity-70", colors[type], className)}>
+      {icons[type]}
+    </span>
+  );
+};
+
+// Main content wrapper (wraps Command)
+export type ModelSelectorMainProps = ComponentProps<typeof Command>;
+
+export const ModelSelectorMain = ({
+  className,
+  ...props
+}: ModelSelectorMainProps) => (
+  <div
+    className={cn("flex-1 min-w-0 flex flex-col", className)}
+    {...props}
+  />
 );

@@ -59,7 +59,7 @@ export function VirtualList<T>({
     return (
       loadingState ?? (
         <div className="flex items-center justify-center h-full min-h-32">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
         </div>
       )
     );
@@ -104,7 +104,7 @@ export function VirtualList<T>({
               transform: `translateY(${totalSize + results.length * gap}px)`,
             }}
           >
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
           </div>
         )}
       </div>
