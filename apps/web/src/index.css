@@ -200,6 +200,11 @@
   }
 }
 
+.dark [data-streamdown="code-block"] pre span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
 /* Fumadocs sidebar customization */
 #nd-sidebar {
   --color-fd-background: var(--sidebar);
