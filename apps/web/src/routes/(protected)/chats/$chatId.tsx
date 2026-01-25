@@ -15,6 +15,7 @@ import { VirtualMessageList } from "@/components/chat/virtual-message-list";
 import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { env } from "@just-use-convex/env/web";
+import type { QueueTodo } from "@/components/ai-elements/queue";
 
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
@@ -90,29 +91,37 @@ function ChatPage() {
   const { messages, sendMessage, status, error, stop } = chat;
   const isStreaming = status === "streaming";
   
-  // Derive state from the most recent assistant message's tool calls
-  const derivedTodos = useMemo(() => {
+  const derivedState = useMemo(() => {
+    const state = {
+      todos: [] as QueueTodo[],
+      // Add additional fields here as needed
+    };
+
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.role !== "assistant") return [];
+    if (lastMsg?.role !== "assistant") return state;
 
     for (const part of lastMsg.parts) {
       if (part.type !== "dynamic-tool") continue;
 
-      if (part.toolName === "write_todos") {
-        const output = part.output as {
-          update?: { todos?: Array<{ content: string; status: string }> };
-        };
-        if (output?.update?.todos) {
-          return output.update.todos.map((t, idx) => ({
-            id: `todo-${idx}`,
-            title: t.content,
-            status: t.status as "pending" | "in_progress" | "completed",
-          }));
+      switch (part.toolName) {
+        case "write_todos": {
+          const output = part.output as {
+            update?: { todos?: Array<{ content: string; status: string }> };
+          };
+          if (output?.update?.todos) {
+            state.todos = output.update.todos.map((t, idx) => ({
+              id: `todo-${idx}`,
+              title: t.content,
+              status: t.status as "pending" | "in_progress" | "completed",
+            }));
+          }
+          break;
         }
+        // Add additional tool handlers here
       }
     }
 
-    return [];
+    return state;
   }, [messages]);
 
   const handleSubmit: ChatInputProps["onSubmit"] = async ({ text, files }) => {
@@ -170,7 +179,7 @@ function ChatPage() {
         groupedModels={groupedModels}
         models={models}
         selectedModel={selectedModel}
-        todos={derivedTodos}
+        todos={derivedState.todos}
       />
     </div>
   );
