@@ -22,7 +22,7 @@ function RouteComponent() {
   ]
 
   return (
-    <Tabs defaultValue={location.pathname.split('/').pop()}>
+    <Tabs value={location.pathname.split('/').pop()}>
       <TabsList>
         {paths.map(({ value, label }) => (
           <TabsTrigger key={value} value={value} onClick={() => handleChange(value)}>{label}</TabsTrigger>

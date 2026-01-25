@@ -220,7 +220,6 @@ export function ThemeProvider({
 
   return (
     <ThemeContext.Provider value={value}>
-      <ThemeScript storageKey={storageKey} defaultTheme={defaultTheme} attribute={attribute} enableSystem={enableSystem} />
       {children}
     </ThemeContext.Provider>
   )

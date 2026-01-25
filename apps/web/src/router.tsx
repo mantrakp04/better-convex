@@ -6,6 +6,7 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { Spinner } from "@/components/ui/spinner";
+import { TokenClient } from "@/lib/token-client";
 
 import { routeTree } from "./routeTree.gen";
 
@@ -31,6 +32,8 @@ export function getRouter() {
     },
   });
   convexQueryClient.connect(queryClient);
+
+  const tokenClient = new TokenClient();
 
   // Set up persistence only on the client side
   if (typeof window !== "undefined") {
@@ -58,7 +61,7 @@ export function getRouter() {
         <div>Not Found</div>
       </div>
     ),
-    context: { queryClient, convexQueryClient },
+    context: { queryClient, convexQueryClient, tokenClient },
   });
 
   setupRouterSsrQueryIntegration({

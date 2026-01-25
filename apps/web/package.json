@@ -8,11 +8,13 @@
     "dev": "vite dev"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.51",
     "@base-ui/react": "^1.0.0",
-    "@just-use-convex/backend": "workspace:*",
-    "@just-use-convex/env": "workspace:*",
+    "@cloudflare/ai-chat": "^0.0.4",
     "@convex-dev/better-auth": "catalog:",
     "@convex-dev/react-query": "^0.1.0",
+    "@just-use-convex/backend": "workspace:*",
+    "@just-use-convex/env": "workspace:*",
     "@tailwindcss/vite": "^4.1.8",
     "@tanstack/query-async-storage-persister": "^5.90.21",
     "@tanstack/react-form": "^1.23.5",
@@ -24,6 +26,7 @@
     "@tanstack/react-start": "^1.141.1",
     "@tanstack/react-virtual": "^3.13.18",
     "@tanstack/router-plugin": "^1.141.1",
+    "agents": "^0.3.6",
     "better-auth": "catalog:",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

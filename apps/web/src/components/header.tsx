@@ -9,12 +9,13 @@ export default function Header() {
     { to: "", label: "Home" },
     { to: "docs", label: "Docs" },
     { to: "dashboard", label: "Dashboard" },
+    { to: "chat", label: "Chat" },
     { to: "settings", label: "Settings" },
   ] as const;
 
   return (
     <Tabs
-      defaultValue={location.pathname.split('/').pop()}
+      value={location.pathname.split('/').pop()}
       className="container mx-auto w-4xl border border-border rounded-lg mt-2 px-.5 overflow-x-auto no-scrollbar z-50"
     >
       <TabsList variant="line" className={`w-full justify-between`}>

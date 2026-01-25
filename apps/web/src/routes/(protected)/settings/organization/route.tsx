@@ -23,7 +23,7 @@ function RouteComponent() {
   ]
 
   return (
-    <Tabs defaultValue={location.pathname.split('/').pop()}>
+    <Tabs value={location.pathname.split('/').pop()}>
       <TabsList className="w-full justify-between bg-transparent px-0">
         <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
           {paths.map(({ value, label }) => (

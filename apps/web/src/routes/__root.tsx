@@ -1,5 +1,6 @@
 import type { ConvexQueryClient } from "@convex-dev/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import type { TokenClient } from "@/lib/token-client";
 
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import {
@@ -11,7 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
-import { ThemeProvider } from "@/components/tweakcn-theme-provider";
+import { ThemeProvider, ThemeScript } from "@/components/tweakcn-theme-provider";
 import appCss from "../index.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";
@@ -19,7 +20,6 @@ import { getToken } from "@/lib/auth-server";
 import { seo } from '@/utils/seo'
 
 import Header from "../components/header";
-import { env } from "@just-use-convex/env/web";
 
 const getAuth = createServerFn({ method: "GET" }).handler(async () => {
   return await getToken();
@@ -28,6 +28,7 @@ const getAuth = createServerFn({ method: "GET" }).handler(async () => {
 export interface RouterAppContext {
   queryClient: QueryClient;
   convexQueryClient: ConvexQueryClient;
+  tokenClient: TokenClient;
 }
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
@@ -60,17 +61,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         type: "image/svg+xml",
         href: "/logo.svg",
       }
-    ],
-    scripts: env.VITE_DATA_BUDDY_CLIENT_ID
-      ? [
-          {
-            src: "https://cdn.databuddy.cc/databuddy.js",
-            "data-client-id": env.VITE_DATA_BUDDY_CLIENT_ID,
-            crossOrigin: "anonymous",
-            async: true,
-          },
-        ]
-      : [],
+    ]
   }),
 
   component: RootDocument,
@@ -78,6 +69,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     const token = await getAuth();
     if (token) {
       ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+      ctx.context.tokenClient.setAuth(token);
     }
     return {
       isAuthenticated: !!token,
@@ -98,6 +90,7 @@ function RootDocument() {
         <html lang="en" suppressHydrationWarning>
           <head>
             <HeadContent />
+            <ThemeScript storageKey="theme" defaultTheme="system" attribute="class" enableSystem />
           </head>
           <body>
             <div className="grid h-svh grid-rows-[auto_1fr]">
