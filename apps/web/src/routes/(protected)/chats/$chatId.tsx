@@ -139,7 +139,7 @@ function ChatPage() {
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="mx-auto w-4xl pb-1">
+      <div className="mx-auto w-4xl">
         <TodosDisplay todos={derivedState.todos} />
       </div>
       <ChatInput

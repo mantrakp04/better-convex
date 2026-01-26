@@ -40,7 +40,6 @@ export default {
 export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   private checkpointer: CloudflareDOCheckpointer | null = null;
   private convexClient: ConvexHttpClient | null = null;
-  private user: FunctionReturnType<typeof api.auth.getCurrentUser> | null = null;
 
   private getCheckpointer(): CloudflareDOCheckpointer {
     if (!this.checkpointer) {
@@ -64,12 +63,13 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       this.convexClient = new ConvexHttpClient(this.env.CONVEX_URL);
       this.convexClient.setAuth(token);
 
-      // query the user session
-      const user = await this.convexClient.query(api.auth.getCurrentUser, {});
-      if (!user) {
-        throw new Error("Unauthorized: No user found");
+      // get the chat
+      const chat = await this.convexClient.query(api.chats.index.get, {
+        _id: this.name
+      });
+      if (!chat) {
+        throw new Error("Unauthorized: No chat found");
       }
-      this.user = user;
     }
   }
 

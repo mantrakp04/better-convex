@@ -90,7 +90,7 @@ function AgentInstanceInner({ chatId }: { chatId: string }) {
 
   const agent = useAgent<ChatSettings>({
     agent: "agent-worker",
-    name: `chat-${chatId}`,
+    name: chatId,
     host: env.VITE_AGENT_URL,
     onStateUpdate: handleStateUpdate,
     onMessage: handleMessage,
