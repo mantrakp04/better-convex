@@ -9,7 +9,7 @@ import { CloudflareDOCheckpointer, type CloudflareSqlStorage } from "./checkpoin
 import type { worker } from "../alchemy.run";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
-import type { FunctionReturnType } from "convex/server";
+import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 
 // State type for chat settings synced from frontend
 type ChatState = {
@@ -65,7 +65,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
       // get the chat
       const chat = await this.convexClient.query(api.chats.index.get, {
-        _id: this.name
+        _id: this.name as Id<"chats">
       });
       if (!chat) {
         throw new Error("Unauthorized: No chat found");
