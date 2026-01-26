@@ -145,7 +145,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       });
     } catch (error) {
       console.error("Error in onChatMessage:", error);
-      return new Response("Internal Server Error", { status: 500 });
+      return new Response("Internal Server Error: " + JSON.stringify(error, null, 2), { status: 500 });
     }
   }
 }
