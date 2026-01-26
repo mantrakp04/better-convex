@@ -1,4 +1,4 @@
 {
   "title": "Advanced Patterns",
-  "pages": ["aggregates", "pagination", "authorization"]
+  "pages": ["aggregates", "migrations", "pagination", "authorization"]
 }

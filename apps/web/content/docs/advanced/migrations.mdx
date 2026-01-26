@@ -1,0 +1,291 @@
+---
+title: Migrations
+description: Safely evolve your schema with @convex-dev/migrations
+---
+
+# Migrations
+
+The `@convex-dev/migrations` component enables stateful database migrations in Convex. Use it when you need to backfill data, add required fields to existing documents, or transform data across your tables.
+
+## Why Migrations?
+
+Convex validates your schema on deploy. If you add a required field to a table with existing documents, deployment fails:
+
+```
+Schema validation failed.
+Document with ID "jd704qq..." in table "chats" does not match the schema:
+Object is missing the required field `isPinned`.
+```
+
+Migrations solve this by letting you:
+1. Deploy with an optional field
+2. Backfill existing documents
+3. Make the field required
+
+## Installation
+
+```bash
+bun add @convex-dev/migrations
+```
+
+## Setup
+
+### 1. Register the Component
+
+```ts
+// convex/convex.config.ts
+import { defineApp } from "convex/server";
+import migrations from "@convex-dev/migrations/convex.config";
+
+const app = defineApp();
+app.use(migrations);
+
+export default app;
+```
+
+### 2. Create the Migrations File
+
+```ts
+// convex/migrations.ts
+import { Migrations } from "@convex-dev/migrations";
+import { components } from "./_generated/api.js";
+import type { DataModel } from "./_generated/dataModel.js";
+
+export const migrations = new Migrations<DataModel>(components.migrations);
+
+// Export the runner for CLI usage
+export const run = migrations.runner();
+```
+
+## Defining Migrations
+
+### Basic Field Backfill
+
+Add a default value to existing documents:
+
+```ts
+export const addIsPinnedToChats = migrations.define({
+  table: "chats",
+  migrateOne: async (ctx, doc) => {
+    if ((doc as Record<string, unknown>).isPinned === undefined) {
+      await ctx.db.patch(doc._id, { isPinned: false });
+    }
+  },
+});
+```
+
+### Returning a Patch
+
+If `migrateOne` returns an object, it's automatically applied as a patch:
+
+```ts
+export const setDefaultPriority = migrations.define({
+  table: "todos",
+  migrateOne: (ctx, doc) => {
+    if (doc.priority === undefined) {
+      return { priority: "medium" };
+    }
+  },
+});
+```
+
+### Clearing a Field
+
+Set a field to `undefined` to remove it:
+
+```ts
+export const removeDeprecatedField = migrations.define({
+  table: "users",
+  migrateOne: () => ({ legacyField: undefined }),
+});
+```
+
+### Data Transformation
+
+Transform data during migration:
+
+```ts
+export const normalizeEmails = migrations.define({
+  table: "users",
+  migrateOne: async (ctx, doc) => {
+    if (doc.email !== doc.email.toLowerCase()) {
+      await ctx.db.patch(doc._id, {
+        email: doc.email.toLowerCase(),
+      });
+    }
+  },
+});
+```
+
+## Running Migrations
+
+### From the CLI
+
+Run a specific migration:
+
+```bash
+bunx convex run migrations:run '{"fn": "migrations:addIsPinnedToChats"}' --prod
+```
+
+### During Deployment
+
+Chain migration execution with deployment:
+
+```bash
+bunx convex deploy -y && bunx convex run migrations:run '{"fn": "migrations:addIsPinnedToChats"}' --prod
+```
+
+### Migration Status
+
+The CLI returns migration status:
+
+```json
+{
+  "Name": "migrations:addIsPinnedToChats",
+  "Status": "Migration was started and finished in one batch.",
+  "lastFinished": "2025-01-26T00:17:10.465Z",
+  "lastStarted": "2025-01-26T00:17:10.465Z",
+  "processed": 2
+}
+```
+
+## Adding Required Fields Workflow
+
+When adding a required field to an existing table:
+
+### Step 1: Make the Field Optional
+
+```ts
+// convex/tables/chats.ts
+export const chatsZodSchema = {
+  organizationId: z.string(),
+  userId: z.string(),
+  title: z.string(),
+  isPinned: z.boolean().optional(), // Start optional
+  updatedAt: z.number(),
+};
+```
+
+### Step 2: Deploy with Migration Code
+
+```bash
+bunx convex deploy -y
+```
+
+### Step 3: Run the Migration
+
+```bash
+bunx convex run migrations:run '{"fn": "migrations:addIsPinnedToChats"}' --prod
+```
+
+### Step 4: Make the Field Required
+
+```ts
+export const chatsZodSchema = {
+  organizationId: z.string(),
+  userId: z.string(),
+  title: z.string(),
+  isPinned: z.boolean(), // Now required
+  updatedAt: z.number(),
+};
+```
+
+### Step 5: Deploy Final Schema
+
+```bash
+bunx convex deploy -y
+```
+
+## Batch Processing
+
+Migrations run in batches to avoid timeouts. Large tables are processed across multiple function invocations:
+
+```ts
+export const heavyMigration = migrations.define({
+  table: "largeTable",
+  batchSize: 100, // Process 100 docs per batch (default)
+  migrateOne: async (ctx, doc) => {
+    // Complex transformation
+  },
+});
+```
+
+## Best Practices
+
+### 1. Always Check for Existing Values
+
+```ts
+migrateOne: async (ctx, doc) => {
+  // Check before patching to make migrations idempotent
+  if ((doc as Record<string, unknown>).newField === undefined) {
+    await ctx.db.patch(doc._id, { newField: "default" });
+  }
+}
+```
+
+### 2. Test on Dev First
+
+```bash
+# Run on dev deployment first
+bunx convex run migrations:run '{"fn": "migrations:myMigration"}'
+
+# Then on prod
+bunx convex run migrations:run '{"fn": "migrations:myMigration"}' --prod
+```
+
+### 3. Keep Migrations Small
+
+Split large changes into multiple migrations:
+
+```ts
+// Good: Separate migrations
+export const addFieldA = migrations.define({ ... });
+export const addFieldB = migrations.define({ ... });
+
+// Bad: One massive migration
+export const addEverything = migrations.define({ ... });
+```
+
+### 4. Document Migration Order
+
+If migrations depend on each other, document the order:
+
+```ts
+// Run in order:
+// 1. migrations:addIsPinned
+// 2. migrations:setPinnedIndex
+// 3. migrations:migrateOldPinnedData
+```
+
+### 5. Clean Up Old Migrations
+
+After migrations have run on all environments, consider removing them to keep the codebase clean.
+
+## Troubleshooting
+
+### Schema Validation Failed
+
+If deployment fails with schema validation errors:
+1. Make the new field optional
+2. Deploy
+3. Run migration
+4. Make field required
+5. Deploy again
+
+### Migration Timeout
+
+For large tables, migrations run in batches automatically. If you still hit timeouts, reduce `batchSize`:
+
+```ts
+migrations.define({
+  table: "hugeTable",
+  batchSize: 50, // Smaller batches
+  migrateOne: async (ctx, doc) => { ... },
+});
+```
+
+### Partial Migration
+
+If a migration fails partway through, it can be safely rerun. The migration tracks progress and continues from where it left off.
+
+Next, learn about [Pagination](/docs/advanced/pagination).
