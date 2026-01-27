@@ -22,7 +22,8 @@ export default {
     // Get origin for CORS (credentials require specific origin, not *)
     const origin = env.SITE_URL;
 
-    return (
+    const headers = request.headers;
+    const forwaredResponse = (
       (await routeAgentRequest(request, env, {
         prefix: 'agents',
         cors: {
@@ -34,6 +35,14 @@ export default {
         },
       })) || new Response('Not found', { status: 404 })
     );
+
+    return new Response(forwaredResponse.body, {
+      ...forwaredResponse,
+      headers: {
+        ...forwaredResponse.headers,
+        ...headers,
+      }
+    });
   },
 };
 
