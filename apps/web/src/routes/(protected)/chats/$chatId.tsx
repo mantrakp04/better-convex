@@ -86,11 +86,11 @@ function ChatPage() {
 
       switch (part.toolName) {
         case "write_todos": {
-          const output = part.output as {
-            update?: { todos?: Array<{ content: string; status: string }> };
+          const output = part.input as {
+            todos?: Array<{ content: string; status: string }>;
           };
-          if (output?.update?.todos) {
-            state.todos = output.update.todos.map((t, idx) => ({
+          if (output?.todos) {
+            state.todos = output.todos.map((t, idx) => ({
               id: `todo-${idx}`,
               title: t.content,
               status: t.status as "pending" | "in_progress" | "completed",

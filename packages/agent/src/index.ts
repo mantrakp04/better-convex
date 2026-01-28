@@ -121,10 +121,9 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       // Use the DO's name as the thread ID for consistent state
       const threadId = this.name;
 
-      const streamEvents = agent.streamEvents(
+      const stream = await agent.stream(
         { messages: [humanMessage] },
         {
-          version: "v2",
           configurable: {
             thread_id: threadId,
           },
@@ -133,9 +132,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
           signal: options?.abortSignal, // Pass abort signal to stop streaming when client requests
         },
       );
-
       return createUIMessageStreamResponse({
-        stream: toUIMessageStream(streamEvents),
+        stream: toUIMessageStream(stream),
       });
     } catch (error) {
       console.error("Error in onChatMessage:", error);
