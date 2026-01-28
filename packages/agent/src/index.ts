@@ -81,9 +81,9 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       Object.defineProperty(writeTodos, 'needsApproval', {
         value: async ({ todos }: { todos: Array<{ content: string; status: 'pending' | 'in_progress' | 'done'; id?: string }> }) => {
           if (todos.every(t => t.status === "pending")) {
-            return false;
+            return true;
           }
-          return true;
+          return false;
         },
         writable: true,
         configurable: true,

@@ -16,6 +16,7 @@ import type { QueueTodo } from "@/components/ai-elements/queue";
 import type { ConfirmationProps } from "@/components/ai-elements/confirmation";
 import { useAgentInstance } from "@/providers/agent";
 import { TodosDisplay } from "@/components/chat/todos-display";
+import type { ChatAddToolApproveResponseFunction } from "ai";
 
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
@@ -36,16 +37,25 @@ function ChatPage() {
   const { chatId } = Route.useParams();
   const { chat, settings, setSettings, isReady } = useAgentInstance(chatId);
   const { groupedModels, models } = useOpenRouterModels();
-  const addToolApprovalResponse = chat?.addToolApprovalResponse!;
 
   const selectedModel = useMemo(
     () => models.find((m: OpenRouterModel) => m.slug === settings.model),
     [models, settings.model]
   );
 
+  if (!isReady || !chat) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex">
+          <ChatLoadingSkeleton />
+        </div>
+      </div>
+    );
+  }
+
+
   // Extract values safely before any conditional returns to maintain hook order
-  const messages = chat?.messages ?? [];
-  const sendMessage = chat?.sendMessage;
+  const { status, error, stop, messages, sendMessage, addToolApprovalResponse } = chat;
 
   const handleSubmit: ChatInputProps["onSubmit"] = useCallback(
     async ({ text, files }: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => {
@@ -74,6 +84,11 @@ function ChatPage() {
     },
     [sendMessage]
   );
+
+  const handleToolApprovalResponse: ChatAddToolApproveResponseFunction = useCallback((response) => {
+    addToolApprovalResponse(response);
+    sendMessage()
+  }, [addToolApprovalResponse]);
 
   const derivedState = useMemo(() => {
     const state = {
@@ -114,17 +129,6 @@ function ChatPage() {
     return state;
   }, [messages]);
 
-  if (!isReady || !chat) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex-1 flex">
-          <ChatLoadingSkeleton />
-        </div>
-      </div>
-    );
-  }
-
-  const { status, error, stop } = chat;
   const isStreaming = status === "streaming";
 
   return (
@@ -138,7 +142,7 @@ function ChatPage() {
               description="Ask me anything or share files to get started"
             />
           ) : (
-            <VirtualMessageList messages={messages} isStreaming={isStreaming} toolApprovalResponse={addToolApprovalResponse} />
+            <VirtualMessageList messages={messages} isStreaming={isStreaming} toolApprovalResponse={handleToolApprovalResponse} />
           )}
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3 mx-auto w-4xl">
@@ -154,7 +158,7 @@ function ChatPage() {
           todos={derivedState.todos}
           approval={derivedState.todosApproval}
           state={derivedState.todosState}
-          toolApprovalResponse={addToolApprovalResponse}
+          toolApprovalResponse={handleToolApprovalResponse}
         />
       </div>
       <ChatInput
