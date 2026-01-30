@@ -1,15 +1,13 @@
-import { routeAgentRequest, type Connection, type ConnectionContext } from "agents";
+import { routeAgentRequest, type Connection, type ConnectionContext, callable } from "agents";
 import { AIChatAgent, type OnChatMessageOptions } from "agents/ai-chat-agent";
-import { toBaseMessages, toUIMessageStream } from "@ai-sdk/langchain";
-import { createUIMessageStreamResponse, type StreamTextOnFinishCallback, type ToolSet } from "ai";
-import { createDeepAgent } from "deepagents";
-import { ChatOpenAI } from "@langchain/openai";
-import { HumanMessage } from "@langchain/core/messages";
-import { CloudflareDOCheckpointer, type CloudflareSqlStorage } from "./checkpointer";
+import { generateText, type StreamTextOnFinishCallback, type ToolSet, Output } from "ai";
+import { type PlanAgent, NodeFilesystemBackend } from "@voltagent/core";
+import { createAiClient } from "./client";
 import type { worker } from "../alchemy.run";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
+import { z } from "zod";
 
 // State type for chat settings synced from frontend
 type ChatState = {
@@ -38,18 +36,35 @@ export default {
 };
 
 export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
-  private checkpointer: CloudflareDOCheckpointer | null = null;
   private convexClient: ConvexHttpClient | null = null;
+  private planAgent: PlanAgent | null = null;
 
-  private getCheckpointer(): CloudflareDOCheckpointer {
-    if (!this.checkpointer) {
-      this.checkpointer = new CloudflareDOCheckpointer(
-        this.ctx.storage.sql as CloudflareSqlStorage
-      );
+  private async generateTitle(userMessage: string): Promise<void> {
+    if (!this.convexClient) return;
+
+    try {
+      const { output } = await generateText({
+        model: createAiClient("openai/gpt-oss-20b"),
+        output: Output.object({
+          schema: z.object({
+            title: z.string().describe("A short, concise title (max 6 words) for a chat conversation based on the user's first message."),
+          }),
+        }),
+        prompt: userMessage,
+      });
+
+      const title = output.title;
+      if (title) {
+        await this.convexClient.mutation(api.chats.index.update, {
+          _id: this.name as Id<"chats">,
+          patch: { title },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to generate title:", error);
     }
-    return this.checkpointer;
   }
-
+  
   private async _init(request: Request): Promise<void> {
     const token = (new URL(request.url)).searchParams.get('token');
     if (!token) {
@@ -70,6 +85,49 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     }
   }
 
+  private async _prepAgent(): Promise<PlanAgent> {
+    const { PlanAgent } = await import("@voltagent/core");
+    
+    const filesystemBackend = new NodeFilesystemBackend({
+      rootDir: "/tmp/voltagent",
+      virtualMode: true,
+    });
+
+    const agent = new PlanAgent({
+      name: "Assistant",
+      systemPrompt: "You are a helpful assistant.",
+      model: createAiClient(this.state?.model || this.env.OPENROUTER_MODEL, this.state?.reasoningEffort),
+      filesystem: {
+        backend: filesystemBackend,
+      },
+      toolResultEviction: {
+        enabled: true,
+        tokenLimit: 20000,
+      },
+      maxSteps: 100
+    });
+    const writeTodos = agent.getTools().find(t => t.name === "write_todos");
+    if (writeTodos) {
+      Object.defineProperty(writeTodos, 'needsApproval', {
+        value: async ({ todos }: { todos: Array<{ content: string; status: 'pending' | 'in_progress' | 'done'; id?: string }> }) => {
+          if (todos.every(t => t.status === "pending")) {
+            return true;
+          }
+          return false;
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
+    this.planAgent = agent;
+    return agent;
+  }
+
+  override async onStart(props?: Record<string, unknown> | undefined): Promise<void> {
+    await this._prepAgent();
+    return await super.onStart(props);
+  }
+
   override async onRequest(request: Request): Promise<Response> {
     await this._init(request);
     return await super.onRequest(request);
@@ -81,7 +139,25 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   }
 
   override async onStateUpdate(state: ChatState, source: Connection | "server"): Promise<void> {
+    await this._prepAgent();
     await super.onStateUpdate(state, source);
+  }
+
+  @callable()
+  async updateMessages(messages: Parameters<typeof this.persistMessages>[0]) {
+    // Get the IDs of messages to keep
+    const keepIds = new Set(messages.map(m => m.id));
+    
+    // Delete messages that are no longer in the list
+    const existingMessages = this.messages;
+    for (const msg of existingMessages) {
+      if (!keepIds.has(msg.id)) {
+        this.sql`DELETE FROM cf_ai_chat_agent_messages WHERE id = ${msg.id}`;
+      }
+    }
+    
+    // Persist the new message set
+    await this.persistMessages(messages);
   }
 
   override async onChatMessage(
@@ -89,52 +165,24 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     options?: OnChatMessageOptions
   ): Promise<Response> {
     try {
-      // Use model from state (set by frontend) or fall back to env default
-      const modelId = this.state?.model || this.env.OPENROUTER_MODEL;
-      const reasoningEffort = this.state?.reasoningEffort;
+      // Generate title for first message (fire and forget)
+      if (this.messages.length === 1) {
+        const firstMessage = this.messages[0];
+        const textContent = firstMessage?.parts
+          ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map((p) => p.text)
+          .join(" ");
+        if (textContent) {
+          this.generateTitle(textContent);
+        }
+      }
 
-      const model = new ChatOpenAI({
-        model: modelId,
-        temperature: 0,
-        configuration: {
-          baseURL: "https://openrouter.ai/api/v1",
-          apiKey: this.env.OPENROUTER_API_KEY,
-        },
-        reasoning: reasoningEffort ? {
-          effort: reasoningEffort,
-        } : undefined,
-      });
+      const agent = this.planAgent || (await this._prepAgent());
+      const stream = await agent?.streamText(this.messages, {
+        abortSignal: options?.abortSignal,
+      })
 
-      const checkpointer = this.getCheckpointer();
-
-      const agent = createDeepAgent({
-        model,
-        systemPrompt: "You are a helpful assistant.",
-        checkpointer,
-      });
-
-      // Get the last user message from this.messages
-      const lastMessage = this.messages[this.messages.length - 1]!;
-      const lastMessageContent = (await toBaseMessages([lastMessage]))[0]?.content;
-      const humanMessage = new HumanMessage(lastMessageContent ?? "");
-
-      // Use the DO's name as the thread ID for consistent state
-      const threadId = this.name;
-
-      const stream = await agent.stream(
-        { messages: [humanMessage] },
-        {
-          configurable: {
-            thread_id: threadId,
-          },
-          streamMode: ["messages", "values"],
-          recursionLimit: 100,
-          signal: options?.abortSignal, // Pass abort signal to stop streaming when client requests
-        },
-      );
-      return createUIMessageStreamResponse({
-        stream: toUIMessageStream(stream),
-      });
+      return stream.toUIMessageStreamResponse();
     } catch (error) {
       console.error("Error in onChatMessage:", error);
       return new Response("Internal Server Error: " + JSON.stringify(error, null, 2), { status: 500 });

@@ -107,6 +107,7 @@ function AgentInstanceInner({ chatId, token }: { chatId: string, token: string |
     agent,
     resume: true,
     onError: handleError,
+    autoContinueAfterToolResult: true,
   });
 
   chatRef.current = chat;
